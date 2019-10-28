@@ -6,6 +6,7 @@ import torchvision
 import torchvision.transforms as transforms
 import os
 
+
 class AlexNet(nn.Module):
     #  for 129 x 129
 
@@ -24,7 +25,7 @@ class AlexNet(nn.Module):
         self.pool5 = nn.MaxPool2d(3, 2)
         self.fc6 = nn.Linear(4096, 4096)
         self.fc7 = nn.Linear(4096, 1028)
-        self.fc8 = nn.Linear(1028, 2)
+        self.fc8 = nn.Linear(1028, 1)
 
     def forward(self, x):
         x = self.norm1(self.pool1(F.relu(self.conv1(x))))
@@ -108,25 +109,27 @@ def train(save_path):
     # testloader = torch.utils.data.DataLoader(testset, batch_size=4, shuffle=False, num_workers=2)
 
     net = AlexNet()
-    invalid_num = len([path for path in os.listdir('./images/0') if os.path.isfile(os.path.join('./images/0', path))])
-    valid_num = len([path for path in os.listdir('./images/1') if os.path.isfile(os.path.join('./images/1', path))])
-    # criterion = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([invalid_num / valid_num]))
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # device = torch.device("cuda")
     # net.cuda()
     net.to(device)
 
+    invalid_num = len([path for path in os.listdir('./images/0') if os.path.isfile(os.path.join('./images/0', path))])
+    valid_num = len([path for path in os.listdir('./images/1') if os.path.isfile(os.path.join('./images/1', path))])
+    criterion = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([invalid_num / valid_num]).to(device))
+    # criterion = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+
+
     for epoch in range(25):
         running_loss = 0.0
         for i, data in enumerate(trainloader):
-            inputs, labels = data[0].to(device), data[1].to(device)
+            inputs, labels = data[0].to(device), data[1].view(-1, 1).float().to(device)
             optimizer.zero_grad()
 
-            outputs = net(inputs)  # .view(-1).to(device)
+            outputs = net(inputs)
             m = nn.Softmax()
-            # print(m(outputs), labels)
+            print(outputs, labels)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -142,4 +145,9 @@ def train(save_path):
     print('Finished Training')
     torch.save(net.state_dict(), save_path)
 
-train('test.pth')
+
+import multiprocessing
+
+if __name__ == "__main__":
+    multiprocessing.set_start_method('spawn', True)
+    train('test.pth')
