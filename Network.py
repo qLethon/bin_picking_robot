@@ -26,6 +26,7 @@ class AlexNet(nn.Module):
         self.fc6 = nn.Linear(4096, 4096)
         self.fc7 = nn.Linear(4096, 1028)
         self.fc8 = nn.Linear(1028, 1)
+        self.dropout = nn.Dropout(p=0.5)
 
     def forward(self, x):
         x = self.norm1(self.pool1(F.relu(self.conv1(x))))
@@ -34,8 +35,8 @@ class AlexNet(nn.Module):
         x = F.relu(self.conv4(x))
         x = self.pool5(F.relu(self.conv5(x)))
         x = x.view(-1, 4096)
-        x = F.relu(self.fc6(x))
-        x = F.relu(self.fc7(x))
+        x = self.dropout(F.relu(self.fc6(x)))
+        x = self.dropout(F.relu(self.fc7(x)))
         x = self.fc8(x)
         
         return x
@@ -60,6 +61,7 @@ class AlexNet2(nn.Module):
         self.fc6 = nn.Linear(1024, 1024)
         self.fc7 = nn.Linear(1024, 256)
         self.fc8 = nn.Linear(256, 1)
+        self.dropout = nn.Dropout(p=0.5)
 
     def forward(self, x):
         x = self.norm1(self.pool1(F.relu(self.conv1(x))))
@@ -68,8 +70,8 @@ class AlexNet2(nn.Module):
         x = F.relu(self.conv4(x))
         x = self.pool5(F.relu(self.conv5(x)))
         x = x.view(-1, 1024)
-        x = F.relu(self.fc6(x))
-        x = F.relu(self.fc7(x))
+        x = self.dropout(F.relu(self.fc6(x)))
+        x = self.dropout(F.relu(self.fc7(x)))
         x = self.fc8(x)
         
         return x
@@ -85,13 +87,14 @@ class Net(nn.Module):
         self.fc1 = nn.Linear(400, 120)
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, 1)
+        self.dropout = nn.Dropout(p=0.5)
 
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
         x = x.view(-1, 400)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
+        x = self.dropout(F.relu(self.fc1(x)))
+        x = self.dropout(F.relu(self.fc2(x)))
         x = self.fc3(x)
         return x
 
@@ -120,7 +123,7 @@ def train(save_path):
     # criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
-
+    
     for epoch in range(25):
         running_loss = 0.0
         for i, data in enumerate(trainloader):
@@ -129,7 +132,7 @@ def train(save_path):
 
             outputs = net(inputs)
             m = nn.Softmax()
-            print(outputs, labels)
+            # print(outputs, labels)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -145,9 +148,7 @@ def train(save_path):
     print('Finished Training')
     torch.save(net.state_dict(), save_path)
 
-
-import multiprocessing
-
 if __name__ == "__main__":
+    import multiprocessing
     multiprocessing.set_start_method('spawn', True)
     train('test.pth')
