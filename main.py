@@ -1,0 +1,80 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+import torchvision
+from torchvision import transforms
+import os
+from Network import AlexNet
+from Network import train
+from PIL import Image
+import numpy as np
+import argparse
+
+
+def get_max_dir(directory_path):
+    os.makedirs(directory_path, exist_ok=True)
+    return max([0] + [int(d.name) for d in os.scandir(directory_path) if d.is_dir() and d.name.isdigit()])
+
+def get_max_file(directory_path):
+    os.makedirs(directory_path, exist_ok=True)
+    return max([0] + [int(f.name.split('.')[0]) for f in os.scandir(directory_path) if f.is_file() and f.name.split('.')[0].isdigit()])
+
+def crop_center(image, x, y, size):
+    d = size // 2
+    return image.crop((x - d, y - d, x + d + 1, y + d + 1))
+
+def main(model):
+    INPUT_SIZE = 129
+    BATCH = 128
+    save_dirctory = './models/' + str(get_max_dir('./models') + 1)
+    os.makedirs(save_dirctory, exist_ok=True)
+    net = AlexNet()
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    net.to(device)
+    # net.load_state_dict(torch.load(model))
+    net.eval()
+    sigmoid = nn.Sigmoid()
+    to_tensor = transforms.ToTensor()
+
+    for i in range(int(1e6)):
+        if i != 0 and (i == 100 or i % 500 == 0):
+            model_save_path = os.path.join(save_dirctory, '{}.pth'.format(i))
+            train(os.path.join(model_save_path))
+            net.load_state_dict(torch.load(model_save_path))
+            net.eval()
+
+        image = Image.open('./images/1/1.jpg')  # TODO: via webcam
+        # TODO: crop and rotate an image alona a red rectangle
+
+        dh = image.height // 255
+        dw = image.width // 255
+        P = np.ndarray(shape=(image.height, image.width), dtype=float)
+
+        with torch.no_grad():
+            for h in range(INPUT_SIZE // 2, image.height - INPUT_SIZE // 2,  dh):
+                for w in range(INPUT_SIZE // 2, image.width - INPUT_SIZE // 2, dw * BATCH):
+                    input_images = []
+                    BW = list(range(w, min(image.width - INPUT_SIZE // 2, w + BATCH * dw), dw))
+                    for bw in BW:
+                        input_image = crop_center(image, bw, h, INPUT_SIZE)
+                        input_images.append(to_tensor(input_image))
+                    outputs = sigmoid(net(torch.stack(input_images).to(device)))
+                    print(h, w)
+                    
+                    for batch, bw in enumerate(BW):
+                        P[h][bw] = outputs[batch]
+
+
+        max_point = np.unravel_index(np.argmax(P), P.shape)
+        #res = pick(max_point * (255 / image_height))  # TODO: order via Arduino
+        res = 1
+        image_save_path = './images/{}/{}.jpg'.format(res, get_max_file('./images/{}'.format(res)) + 1)
+        crop_center(image, max_point[1], max_point[0], INPUT_SIZE).save(image_save_path)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-m', '--model', type=str)
+    args = parser.parse_args()
+    main(args.model)
