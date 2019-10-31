@@ -10,7 +10,7 @@ from Network import train
 from PIL import Image
 import numpy as np
 import argparse
-
+from interfaces import pick
 
 def get_max_dir(directory_path):
     os.makedirs(directory_path, exist_ok=True)
@@ -32,7 +32,8 @@ def main(model):
     net = AlexNet()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     net.to(device)
-    # net.load_state_dict(torch.load(model))
+    if model is not None:
+        net.load_state_dict(torch.load(model))
     net.eval()
     sigmoid = nn.Sigmoid()
     to_tensor = transforms.ToTensor()
@@ -66,11 +67,16 @@ def main(model):
                         P[h][bw] = outputs[batch]
 
 
-        max_point = np.unravel_index(np.argmax(P), P.shape)
-        #res = pick(max_point * (255 / image_height))  # TODO: order via Arduino
+        max_h, max_w = np.unravel_index(np.argmax(P), P.shape)
+        # print(np.unravel_index(np.argmax(P), P.shape))
+        try:
+            res = pick(max_w * 255 // image.width, max_h * 255 // image.height)
+        except Exception as e:
+            print(e)
+            continue
         res = 1
         image_save_path = './images/{}/{}.jpg'.format(res, get_max_file('./images/{}'.format(res)) + 1)
-        crop_center(image, max_point[1], max_point[0], INPUT_SIZE).save(image_save_path)
+        crop_center(image, max_w, max_h, INPUT_SIZE).save(image_save_path)
 
 
 if __name__ == "__main__":
