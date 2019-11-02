@@ -11,6 +11,16 @@ from PIL import Image
 import numpy as np
 import argparse
 from interfaces import pick
+import cv2
+
+def capture(num):
+    cam = cv2.VideoCapture(num)
+    cam.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    # cam.set(cv2.CAP_PROP_FRAME_HEIGHT, 4000)
+    retval, frame = cam.read()
+    if not retval:
+        print('cannnot read')
+    return Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
 def get_max_dir(directory_path):
     os.makedirs(directory_path, exist_ok=True)
@@ -26,11 +36,12 @@ def crop_center(image, x, y, size):
 
 def main(model):
     INPUT_SIZE = 129
-    BATCH = 128
+    BATCH = 256
     save_dirctory = './models/' + str(get_max_dir('./models') + 1)
     os.makedirs(save_dirctory, exist_ok=True)
     net = AlexNet()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(device)
     net.to(device)
     if model is not None:
         net.load_state_dict(torch.load(model))
@@ -45,7 +56,8 @@ def main(model):
             net.load_state_dict(torch.load(model_save_path))
             net.eval()
 
-        image = Image.open('./images/1/1.jpg')  # TODO: via webcam
+        # image = Image.open('./images/1/1.jpg')  # TODO: via webcam
+        image = capture(2)
         # TODO: crop and rotate an image alona a red rectangle
 
         dh = image.height // 255
