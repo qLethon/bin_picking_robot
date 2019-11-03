@@ -5,8 +5,8 @@ static int nowElbowDegree;
 static int nowShoulderDegree;
 
 struct armLengthStruct{
-  const int SHOULDER2ELBOW  = 109;
-  const int ELBOW2HAND      = 99;
+  const int SHOULDER2ELBOW  = 110;
+  const int ELBOW2HAND      = 100;
 }armLength;
 
 armExtendCtrl::armExtendCtrl(struct extendParameters handParameters,struct extendParameters elbowParameters,struct extendParameters shoulderParameters){
@@ -15,8 +15,8 @@ armExtendCtrl::armExtendCtrl(struct extendParameters handParameters,struct exten
   shoulderPara  = shoulderParameters;
 
   nowHandDegree     = 0;
-  nowElbowDegree    = 0;
-  nowShoulderDegree = 0;
+  nowElbowDegree    = 90;
+  nowShoulderDegree = 90;
   
   handServo     = new Servo;
   elbowServo    = new Servo;
@@ -59,37 +59,42 @@ int armExtendCtrl::nextDegree(Servo* ser,struct extendParameters para,int& nowDe
         ser->write(--nowDegree);
         return 1;
       }else{
-        ser->write(nowDegree);  
+        ser->write(nowDegree);
+        return 0;
       }
-      return 0;
     break;
   }
 }
 int armExtendCtrl::extend(int l,int depth){
-  l+=20;
   int maxLength = armLength.SHOULDER2ELBOW+armLength.ELBOW2HAND;
   int wantLength = (int)(sqrt(pow(l,2)+pow(depth,2)));
-  if(wantLength>maxLength)return 1;
-
-  //ここで余弦なんたら？で角度だす
-  int elbowAbsoluteDeg     = (int)((acos(((double)(pow(armLength.SHOULDER2ELBOW,2)+pow(armLength.ELBOW2HAND,2)-pow(wantLength,2)))\
-                                /((double)(2*armLength.SHOULDER2ELBOW*armLength.ELBOW2HAND))))*180.0/PI);
-  int shoulderAbsoluteDeg  = (int)((acos(((double)(pow(armLength.SHOULDER2ELBOW,2)+pow(wantLength,2)-pow(armLength.ELBOW2HAND,2)))\
-                                /((double)(2*armLength.SHOULDER2ELBOW*wantLength))))*180.0/PI);
-  int handAbsoluteDeg   = 180-elbowAbsoluteDeg-shoulderAbsoluteDeg+9;
-  //深さの傾き分を出す
-  int depthDeg        =  (int)(atan(((double)depth+5)/((double)l))*180.0/PI);
-  
-  //手の角度変換
   int targetHandDeg =0;
   int targetElbowDeg =0;
   int targetShoulderDeg =0;
-  targetHandDeg = handAbsoluteDeg;
-  targetHandDeg -= depthDeg;
-  targetElbowDeg = 180-elbowAbsoluteDeg;
-  targetShoulderDeg = shoulderAbsoluteDeg;
-  targetShoulderDeg += depthDeg;
-  
+  //深さの傾き分を出す
+  int depthDeg        =  (int)((atan2(depth,l)*180.0)/PI);
+  if(wantLength>maxLength){
+    targetHandDeg = 0;
+    targetElbowDeg =0;
+    targetShoulderDeg =depthDeg;
+  }else{
+    //ここで余弦なんたら？で角度だす
+    int elbowAbsoluteDeg     = (int)((acos(((double)(pow(armLength.SHOULDER2ELBOW,2)+pow(armLength.ELBOW2HAND,2)-pow(wantLength,2)))\
+                                  /((double)(2.0*armLength.SHOULDER2ELBOW*armLength.ELBOW2HAND))))*180.0/PI);
+    int shoulderAbsoluteDeg  = (int)((acos(((double)(pow(armLength.SHOULDER2ELBOW,2)+pow(wantLength,2)-pow(armLength.ELBOW2HAND,2)))\
+                                  /((double)(2.0*armLength.SHOULDER2ELBOW*wantLength))))*180.0/PI);
+    if(shoulderAbsoluteDeg>90)shoulderAbsoluteDeg=180-shoulderAbsoluteDeg;
+    int handAbsoluteDeg   = 180-elbowAbsoluteDeg-shoulderAbsoluteDeg;
+    //手の角度変換
+    targetHandDeg = handAbsoluteDeg;
+    targetHandDeg -= depthDeg;
+    targetElbowDeg = 180-elbowAbsoluteDeg;
+    targetShoulderDeg = shoulderAbsoluteDeg;
+    targetShoulderDeg += depthDeg;
+    if(targetHandDeg<0)targetHandDeg=0;
+    if(targetElbowDeg<0)targetElbowDeg=0;
+    if(targetShoulderDeg<0)targetShoulderDeg=0;
+  }
   //回転
   int rt =0;
   switch(nextDegree(handServo,handPara,nowHandDegree,targetHandDeg)){

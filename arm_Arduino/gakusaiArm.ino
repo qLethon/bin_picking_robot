@@ -16,190 +16,276 @@ armTurnCtrl   armTurn(turnParametaersStruct);
 const int FAN_PIN_NUMBER = 12;
 fanCtrl fan(FAN_PIN_NUMBER);
 
-const int MAGNET_PIN_NUMBER = 13;
-electromagnetCtrl eMagnmet(MAGNET_PIN_NUMBER);
+const int MAGNET_PIN_NUMBER = A3;
+electromagnetCtrl eMagnet(MAGNET_PIN_NUMBER);
 
-const int L_PRESS_SENSOR_PIN_NUMBER = 1;
+const int L_PRESS_SENSOR_PIN_NUMBER = 0;
 pressSensor leftPress(L_PRESS_SENSOR_PIN_NUMBER);
 
-const int R_PRESS_SENSOR_PIN_NUMBER = 2;
+const int R_PRESS_SENSOR_PIN_NUMBER = 1;
 pressSensor rightPress(R_PRESS_SENSOR_PIN_NUMBER);
 
-unsigned char x,y,z;
+
+unsigned char z;
 unsigned char catchOK;
 int l;
 int theta;
+
+union readDataUnion{
+  int integer_point;
+  byte byte_point[2];
+};
+union readDataUnion x,y;
 
 unsigned char nowMoving;
 
 int thetaPercent;
 int nowTurn;
 int nowExtend;
-int canCatch;
+unsigned char canCatch;
 
 unsigned long int movingTime;
 unsigned long int recordTime;
 int turnRand;
 
 void setup() {
+  Serial.begin(115200);
   armExtend.initialize();
   armTurn.initialize();
   fan.initialize();
-  eMagnmet.initialize();
-  x=100;
-  y=100;
-  z=0;
-  l = calcLength(x,y);
-  l = calcLength(x,y);
-  theta = calcDegree(x,y);
-  Serial.begin(115200);
+  eMagnet.initialize();
+  x.integer_point=80;
+  y.integer_point=100;
+  z=60;
+  l = calcLength(x.integer_point,y.integer_point);
+  theta = calcDegree(x.integer_point,y.integer_point);
   randomSeed(analogRead(2));
   nowMoving=0;
   recordTime=0;
   movingTime=0;
   catchOK=0;
   canCatch=0;
+  fan.on();
 }
 
 void loop() {
   /*動作テスト用*/
-//  nowExtend =   armExtend.extend(70,30);//110mmで30mmの高さのところへ伸ばす
+//  nowExtend =   armExtend.extend(110,90);//110mmで30mmの高さのところへ伸ばす
 //  nowTurn   =   armTurn.turn(45);//20度回転
 //  fan.on();//ファンの電源をOnに
-//  eMagnmet.on(); //マグネットをoffに
+//  eMagnet.on(); //マグネットをoffに
+//  led.bright(0x1);
+//eMagnet.on(); 
   /*本番用*/
-  
-  if(Serial.available()>=4){
-    /*'s'+x座標+y座標+'e'*/
-    unsigned char readData=Serial.read();
-    if(readData=='s'){
-      x=Serial.read();
-      y=Serial.read();
+  //情報更新
+  if(Serial.available()>=5){
+    /*'s'+x座標+y座標*/
+    char readData=Serial.read();
+    if(readData=='s'){                //ビッグエンディアンかリトルエンディアンかで[0]と[1]の場所を変更
+      x.byte_point[1]=Serial.read();
+      x.byte_point[0]=Serial.read();
+      y.byte_point[1]=Serial.read();
+      y.byte_point[0]=Serial.read();
+      l     = calcLength(x.integer_point,y.integer_point);
+      theta = calcDegree(x.integer_point,y.integer_point);
+      z     = 100;//上が正
+      nowMoving=0x01;
     }
-    l = calcLength(x,y);
-    theta = calcDegree(x,y);
-    z = 80;
-    nowMoving=0x01;
   }
-  nowTurn   =   armTurn.turn(theta);
-  nowExtend =   armExtend.extend(l,z);
-  fanSwitch(movingTime,5,10);
+  nowTurn   =   armTurn.turn(theta);    //回る
+  nowExtend =   armExtend.extend(l,z);  //伸ばす
+  fanSwitch(movingTime,5,10);         //ファンを5*10秒間onにし，のちに5秒offにする
   switch(nowMoving){
+    case 0x01:
+      z=100;
+      nowMoving=0x02;
+    break;
+    case 0x02:
+      recordTime =millis();
+      nowMoving =0x03;
+    break;
+    case 0x03:
+      if((millis()-recordTime)>1000){
+        nowMoving =0x11;
+      }
+    break;
+    
     /*
-     * キャッチ作業
+     * キャッチ下げ
      */
-    case 0x01: //電磁石オン
-      eMagnmet.on();
-      nowMoving =0x02;
+    case 0x11: //電磁石オン
+      eMagnet.on();
+      nowMoving =0x12;
     break;
-    case 0x02: //キャッチ下げ
-      if(nowTurn==0&&nowExtend==0){
-        z--;
-      }
-      if(z==10){
-        nowMoving =0x03;  
-      }
+    case 0x12: //キャッチ下げ
+      z-=1;
+      nowMoving =0x13;
     break;
-    case 0x03://キャッチ上げ
-      if(nowTurn==0&&nowExtend==0){
-        z++;
-      }
-      if(z==50){
-        nowMoving =0x04;
-      }
-    break;
-    case 0x04:
-      turnRand = random(10,80);
-      nowMoving = 0x55;
-    break;
-    case 0x05://回転方向の決定
-      if(theta<90){
-        nowMoving =0x11;//右→左
+    case 0x13:
+      if(z<=40){
+        nowMoving = 0x14;
       }else{
-        nowMoving =0x21;//左→右
+        nowMoving=0x12;
+        delay(2);  
+      }
+    break;
+    case 0x14:
+      recordTime =millis();
+      nowMoving =0x15;
+    break;
+    case 0x15:
+      if((millis()-recordTime)>1000){
+        nowMoving =0x16;
+      }
+    break;
+    case 0x16:
+      if(nowTurn==0&&nowExtend==0){
+        nowMoving =0x21;
+      }
+    break;
+    /*
+     * キャッチ上げ
+     */
+    case 0x21://キャッチ上げ
+      z=80;
+      nowMoving =0x22;
+    break;
+    case 0x22:
+      recordTime =millis();
+      nowMoving =0x23;
+    break;
+    case 0x23:
+      if((millis()-recordTime)>1000){
+        nowMoving =0x24;
+      }
+    break;
+    case 0x24://回転のする角度や長さの決定
+      turnRand = random(50,70);
+      l = random(100,180);
+      nowMoving = 0x25;
+    break;
+    case 0x25:
+      if(nowTurn==0&&nowExtend==0){
+        nowMoving =0x26;
+      }
+    break;
+    case 0x26:
+      if(nowExtend==0){
+        nowMoving = 0x27;
+      }
+    break;
+    case 0x27:
+      recordTime =millis();
+      nowMoving =0x28;
+    break;
+    case 0x28:
+      if((millis()-recordTime)>1000){
+        nowMoving =0x29;
+      }
+    break;
+    case 0x29://回転方向の決定
+      if(theta<90){
+        nowMoving =0x31;//右→左
+      }else{
+        nowMoving =0x41;//左→右
       }
     break;
     /*
      * 右→左
      */
-    case 0x11://回転
-      if(nowTurn==0&&nowExtend==0){
-        theta++;
+    case 0x31://回転
+      theta = 180-turnRand;
+      nowMoving =0x32;
+    break;
+    case 0x32:
+      recordTime =millis();
+      nowMoving =0x33;
+    break;
+    case 0x33:
+      if((millis()-recordTime)>3000){
+        nowMoving =0x34;
       }
-      if(theta>(90)+turnRand){
-        nowMoving =0x31;
+    break;
+    case 0x34:
+      if(nowTurn==0&&nowExtend==0){
+        nowMoving =0x51;
       }
     break;
     /*
      * 左→右
      */
-    case 0x21://回転
-      if(nowTurn==0&&nowExtend==0){
-        theta--;
+    case 0x41://回転
+      theta = turnRand;
+      nowMoving =0x42;
+    break;
+    case 0x42:
+      recordTime =millis();
+      nowMoving =0x43;
+    break;
+    case 0x43:
+      if((millis()-recordTime)>3000){
+        nowMoving =0x44;
       }
-      if(theta>turnRand){
-        nowMoving =0x41;
+    break;
+    case 0x44:
+      if(nowTurn==0&&nowExtend==0){
+        nowMoving =0x61;
       }
     break;
     /*
-     * 左で離す
+      * 左で離す
      */
-    case 0x31://初期化
+    case 0x51://初期化
       canCatch=0;
-      nowMoving =0x32;
-    break;
-
-    case 0x32:
       recordTime =millis();
-      canCatch+=leftPress.reading(20);
-      nowMoving =0x33;
+      nowMoving =0x52;
     break;
-
-    case 0x33:
-      canCatch+=leftPress.reading(20);
-      eMagnmet.off();
-      if((millis()-recordTime)>1000){
-        nowMoving =0x51;
+    
+    case 0x52:
+      eMagnet.off();
+      while((millis()-recordTime)<1000){
+        canCatch+=leftPress.reading(10);
+        delay(2);
       }
+      nowMoving =0x71;
     break;
     /*
      * 右で離す
      */
-    case 0x41://初期化
+    case 0x61://初期化
       canCatch=0;
-      nowMoving =0x42;
-    break;
-
-    case 0x42:
       recordTime =millis();
-      canCatch+=rightPress.reading(20);
-      nowMoving =0x43;
+      nowMoving =0x62;
     break;
-
-    case 0x43:
-      canCatch+=rightPress.reading(20);
-      eMagnmet.off();
-      if((millis()-recordTime)>1000){
-        nowMoving =0x51;
+    
+    case 0x62:
+      eMagnet.off();
+      while((millis()-recordTime)<1000){
+        canCatch+=rightPress.reading(10);
+        delay(2);
       }
+      nowMoving =0x71;
     break;
-
     /*
      *  結果送信
      */
-    case 0x51:
+    case 0x71:
       if(canCatch>0){
-        Serial.write('o');
+        Serial.write(byte(11));
+        Serial.flush();
       }else{
-        Serial.write('x');
+        Serial.write(byte(10));
+        Serial.flush();
       }
       nowMoving =0x00;
+      canCatch  =0;
     break;
+
     default:
     break;
   }
   movingTime = millis()/1000;
-  delay(1);//動作安定のため
+  delay(10);//動作安定のため
 }
 
 void fanSwitch(unsigned long int timer,unsigned long int clk_seconds,unsigned int rest_clk){
@@ -210,9 +296,9 @@ void fanSwitch(unsigned long int timer,unsigned long int clk_seconds,unsigned in
   }
 }
 
-int calcDegree(unsigned char x, unsigned char y){
-  return((int)(atan2(x,y)*180.0/PI));
+int calcDegree(int x, int y){
+  return((int)(atan2(y,x)*180.0/PI));
 }
-int calcLength(unsigned char x, unsigned char y){
-  return((int)(sqrt(pow(x,2)+pow(y,2))));
+int calcLength(int x, int y){
+  return((int)((double)sqrt((double)pow(x,2)+(double)pow(y,2))));
 }

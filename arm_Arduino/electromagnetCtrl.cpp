@@ -6,8 +6,8 @@ void electromagnetCtrl::initialize(void){
   pinMode(pin,OUTPUT);  
 }
 void electromagnetCtrl::on(void){
-  digitalWrite(pin,LOW);
+  digitalWrite(pin,HIGH);
 }
 void electromagnetCtrl::off(void){
-  digitalWrite(pin,HIGH);
+  digitalWrite(pin,LOW);
 }

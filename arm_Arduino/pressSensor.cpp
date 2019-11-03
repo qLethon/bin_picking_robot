@@ -5,7 +5,7 @@ pressSensor::pressSensor(unsigned int pinNum){
 }
 
 int pressSensor::reading(unsigned int thVoltage){
-  if(analogRead(pin)>=thVoltage){
+  if(analogRead(pin)>=(int)thVoltage){
     return 1;
   }else{
     return 0;
