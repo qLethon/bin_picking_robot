@@ -7,11 +7,9 @@ from torchvision import transforms
 import os
 from Network import AlexNet
 from Network import train
-import Network
 from PIL import Image
 import numpy as np
 import argparse
-from interfaces import pick
 import cv2
 
 def capture(num):
@@ -35,12 +33,27 @@ def crop_center(image, x, y, size):
     d = size // 2
     return image.crop((x - d, y - d, x + d + 1, y + d + 1))
 
+def random_position():
+    from random import randint
+    return randint(0, 85), randint(0, 135)
+
+def pick(y, x, indicator):
+    base_x = -120
+    base_y = 75
+    half_x_point = 135
+    #serial return pick(indicator * half_x_point + base_x + x, base_y + y)
+
+
 def main(model):
     INPUT_SIZE = 129
     BATCH = 256
+    OBJECT_NUM = 10
+    picked_count = 0
+    indicator = 0
+    
     save_dirctory = './models/' + str(get_max_dir('./models') + 1)
     os.makedirs(save_dirctory, exist_ok=True)
-    net = Network.AlexNet()
+    net = AlexNet()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(device)
     net.to(device)
@@ -57,40 +70,43 @@ def main(model):
             net.load_state_dict(torch.load(model_save_path))
             net.eval()
 
-        image = Image.open('./images/1/1.jpg')  # TODO: via webcam
-        # image = capture(2)
+        if picked_count >= OBJECT_NUM:
+            picked_count = 0
+            indicator = (indicator + 1) & 1
+
+        image = capture(2)
         # TODO: crop and rotate an image alona a red rectangle
 
-        dh = image.height // 256
-        dw = image.width // 256
-        # P = np.ndarray(shape=(image.height, image.width), dtype=float)
-        x = to_tensor(image).to(device)
-        P = []
+        dh = image.height // 255
+        dw = image.width // 255
+        P = np.ndarray(shape=(image.height, image.width), dtype=float)
 
-        with torch.no_grad():
-            for h in range(256):
-                if (h * dh + INPUT_SIZE >= image.height):
-                    break
-                input_images = []
-                for w in range(256):
-                    if (w * dw + INPUT_SIZE >= image.width):
-                        break
-                    input_images.append(x[:, h * dh:h * dh + INPUT_SIZE , w * dw:w * dw + INPUT_SIZE])
-                outputs = net(torch.stack(input_images))
-                print(h)
-                P.append(outputs)
-            
-        print(P)
+        # with torch.no_grad():
+        #     for h in range(INPUT_SIZE // 2, image.height - INPUT_SIZE // 2,  dh):
+        #         for w in range(INPUT_SIZE // 2, image.width - INPUT_SIZE // 2, dw * BATCH):
+        #             input_images = []
+        #             BW = list(range(w, min(image.width - INPUT_SIZE // 2, w + BATCH * dw), dw))
+        #             for bw in BW:
+        #                 input_image = crop_center(image, bw, h, INPUT_SIZE)
+        #                 input_images.append(to_tensor(input_image))
+        #             outputs = sigmoid(net(torch.stack(input_images).to(device)))
+        #             print(h, w)
+                    
+        #             for batch, bw in enumerate(BW):
+        #                 P[h][bw] = outputs[batch]
+
+
         # max_h, max_w = np.unravel_index(np.argmax(P), P.shape)
         # print(np.unravel_index(np.argmax(P), P.shape))
+        h, w = random_position()
         try:
-            res = pick(max_w * 255 // image.width, max_h * 255 // image.height)
+            res = pick(h, w, indicator)
         except Exception as e:
             print(e)
             continue
-        res = 1
+        picked_count += res
         image_save_path = './images/{}/{}.jpg'.format(res, get_max_file('./images/{}'.format(res)) + 1)
-        crop_center(image, max_w, max_h, INPUT_SIZE).save(image_save_path)
+        crop_center(image, w, h, INPUT_SIZE).save(image_save_path)
 
 
 if __name__ == "__main__":
