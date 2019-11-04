@@ -11,15 +11,57 @@ from PIL import Image
 import numpy as np
 import argparse
 import cv2
+from serialTest.serialPackage import armCommunication
 
-def capture(num):
-    cam = cv2.VideoCapture(num)
-    cam.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+
+def transform_by4(img, points):
+    """ copied from https://blanktar.jp/blog/2015/07/python-opencv-crop-box.html """
+    """ 4点を指定してトリミングする。 """
+
+    points = sorted(points, key=lambda x:x[1])  # yが小さいもの順に並び替え。
+    top = sorted(points[:2], key=lambda x:x[0])  # 前半二つは四角形の上。xで並び替えると左右も分かる。
+    bottom = sorted(points[2:], key=lambda x:x[0], reverse=True)  # 後半二つは四角形の下。同じくxで並び替え。
+    points = np.array(top + bottom, dtype='float32')  # 分離した二つを再結合。
+
+    width = max(np.sqrt(((points[0][0]-points[2][0])**2)*2), np.sqrt(((points[1][0]-points[3][0])**2)*2))
+    height = max(np.sqrt(((points[0][1]-points[2][1])**2)*2), np.sqrt(((points[1][1]-points[3][1])**2)*2))
+
+    dst = np.array([
+            np.array([0, 0]),
+            np.array([width-1, 0]),
+            np.array([width-1, height-1]),
+            np.array([0, height-1]),
+            ], np.float32)
+
+    trans = cv2.getPerspectiveTransform(points, dst)  # 変換前の座標と変換後の座標の対応を渡すと、透視変換行列を作ってくれる。
+    return cv2.warpPerspective(img, trans, (int(width), int(height)))  # 透視変換行列を使って切り抜く。
+
+def np_to_PIL(image):
+    return Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+
+def crop_image_along_line(image):
+    blue, green, red = cv2.split(image)
+    diff = np.where(red >= green, red - (green.astype(np.uint16) * 3 // 10).astype(np.uint8), 0)
+    ret, thresh = cv2.threshold(diff, 150, 255, cv2.THRESH_BINARY)
+    contours, hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours.sort(key=cv2.contourArea, reverse=True)
+    epsilon = 0.05 * cv2.arcLength(contours[0], True)
+    approx = cv2.approxPolyDP(contours[0], epsilon, True)
+
+    return transform_by4(image, approx[:, 0, :])
+
+cam = cv2.VideoCapture(2)
+cam.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+
+def capture():
     # cam.set(cv2.CAP_PROP_FRAME_HEIGHT, 4000)
     retval, frame = cam.read()
     if not retval:
         print('cannnot read')
-    return Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+    # return Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+    return frame
+
+
 
 def get_max_dir(directory_path):
     os.makedirs(directory_path, exist_ok=True)
@@ -37,12 +79,16 @@ def random_position():
     from random import randint
     return randint(0, 85), randint(0, 135)
 
-def pick(y, x, indicator):
+def pick(y, x, indicator, arm):
     base_x = -120
     base_y = 75
     half_x_point = 135
-    #serial return pick(indicator * half_x_point + base_x + x, base_y + y)
-
+    arm.send_position(indicator * half_x_point + base_x + x, base_y + y)
+    print(indicator * half_x_point + base_x + x, base_y + y)
+    while True:
+        res = arm.read_one_byte()
+        if res != 0:
+            return res == 11
 
 def main(model):
     INPUT_SIZE = 129
@@ -51,6 +97,7 @@ def main(model):
     picked_count = 0
     indicator = 0
     
+    arm = armCommunication('COM8',115200,0.01);
     save_dirctory = './models/' + str(get_max_dir('./models') + 1)
     os.makedirs(save_dirctory, exist_ok=True)
     net = AlexNet()
@@ -74,7 +121,9 @@ def main(model):
             picked_count = 0
             indicator = (indicator + 1) & 1
 
-        image = capture(2)
+        print('cap')
+        image = np_to_PIL(crop_image_along_line(capture()))
+        print('done')
         # TODO: crop and rotate an image alona a red rectangle
 
         dh = image.height // 255
@@ -100,11 +149,12 @@ def main(model):
         # print(np.unravel_index(np.argmax(P), P.shape))
         h, w = random_position()
         try:
-            res = pick(h, w, indicator)
+            res = pick(h, w, indicator, arm)
         except Exception as e:
             print(e)
             continue
         picked_count += res
+        print(picked_count)
         image_save_path = './images/{}/{}.jpg'.format(res, get_max_file('./images/{}'.format(res)) + 1)
         crop_center(image, w, h, INPUT_SIZE).save(image_save_path)
 
