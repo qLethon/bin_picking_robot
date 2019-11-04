@@ -7,6 +7,7 @@ from torchvision import transforms
 import os
 from Network import AlexNet
 from Network import train
+import Network
 from PIL import Image
 import numpy as np
 import argparse
@@ -39,7 +40,7 @@ def main(model):
     BATCH = 256
     save_dirctory = './models/' + str(get_max_dir('./models') + 1)
     os.makedirs(save_dirctory, exist_ok=True)
-    net = AlexNet()
+    net = Network.AlexNet()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(device)
     net.to(device)
@@ -56,30 +57,31 @@ def main(model):
             net.load_state_dict(torch.load(model_save_path))
             net.eval()
 
-        # image = Image.open('./images/1/1.jpg')  # TODO: via webcam
-        image = capture(2)
+        image = Image.open('./images/1/1.jpg')  # TODO: via webcam
+        # image = capture(2)
         # TODO: crop and rotate an image alona a red rectangle
 
-        dh = image.height // 255
-        dw = image.width // 255
-        P = np.ndarray(shape=(image.height, image.width), dtype=float)
+        dh = image.height // 256
+        dw = image.width // 256
+        # P = np.ndarray(shape=(image.height, image.width), dtype=float)
+        x = to_tensor(image).to(device)
+        P = []
 
         with torch.no_grad():
-            for h in range(INPUT_SIZE // 2, image.height - INPUT_SIZE // 2,  dh):
-                for w in range(INPUT_SIZE // 2, image.width - INPUT_SIZE // 2, dw * BATCH):
-                    input_images = []
-                    BW = list(range(w, min(image.width - INPUT_SIZE // 2, w + BATCH * dw), dw))
-                    for bw in BW:
-                        input_image = crop_center(image, bw, h, INPUT_SIZE)
-                        input_images.append(to_tensor(input_image))
-                    outputs = sigmoid(net(torch.stack(input_images).to(device)))
-                    print(h, w)
-                    
-                    for batch, bw in enumerate(BW):
-                        P[h][bw] = outputs[batch]
-
-
-        max_h, max_w = np.unravel_index(np.argmax(P), P.shape)
+            for h in range(256):
+                if (h * dh + INPUT_SIZE >= image.height):
+                    break
+                input_images = []
+                for w in range(256):
+                    if (w * dw + INPUT_SIZE >= image.width):
+                        break
+                    input_images.append(x[:, h * dh:h * dh + INPUT_SIZE , w * dw:w * dw + INPUT_SIZE])
+                outputs = net(torch.stack(input_images))
+                print(h)
+                P.append(outputs)
+            
+        print(P)
+        # max_h, max_w = np.unravel_index(np.argmax(P), P.shape)
         # print(np.unravel_index(np.argmax(P), P.shape))
         try:
             res = pick(max_w * 255 // image.width, max_h * 255 // image.height)

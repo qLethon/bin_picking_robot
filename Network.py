@@ -41,6 +41,33 @@ class AlexNet(nn.Module):
         
         return x
 
+class ValNet(AlexNet):
+
+    def _forward(self, x):
+        x = self.norm1(self.pool1(F.relu(self.conv1(x))))
+        x = self.norm2(self.pool2(F.relu(self.conv2(x))))
+        x = F.relu(self.conv3(x))
+        x = F.relu(self.conv4(x))
+        x = self.pool5(F.relu(self.conv5(x)))
+        x = x.view(-1, 4096)
+        x = self.dropout(F.relu(self.fc6(x)))
+        x = self.dropout(F.relu(self.fc7(x)))
+        x = self.fc8(x)
+
+    def forward(self, x):
+        res = [list() for i in range(256)]
+        print(x.size())
+        dh = x.size()[2] // 256
+        dw = x.size()[3] // 256
+        INPUT_SIZE = 129
+        for h in range(255):
+            for w in range(255):
+                    res[h].append(self._forward(x[:, :, h * dh:h * dh + INPUT_SIZE , w * dw:w * dw + INPUT_SIZE]))
+
+        return torch.stack(res)
+                
+        
+
 
 class AlexNet2(nn.Module):
     #  for 65 x 65
