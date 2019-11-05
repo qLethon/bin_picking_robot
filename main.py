@@ -13,16 +13,36 @@ import argparse
 import cv2
 from serialTest.serialPackage import armCommunication
 
-
+def update_points(points){
+    pointsOldDataFile = open('pointsOldData.csv','w')
+    for _point in points:
+        pointLineString = str(_point[0])+","+str(_point[1]) + "\n"
+        pointsOldDataFile.write(pointLineString)
+    pointsOldDataFile.close()
+}
+def read_savedPoints(){
+    points = np.array([])
+    pointsOldDataFile = open('pointsOldData.csv','r')
+    for pointLineString_fromFile in pointsOldDataFile.readlines():
+        pointStrings = pointLineString_fromFile.split(",")
+        pointFloat = [float(p) for p in pointStrings]
+        points.insert(pointFloat,len(points))
+    pointsOldDataFile.close()
+    return points
+}
 def transform_by4(img, points):
     """ copied from https://blanktar.jp/blog/2015/07/python-opencv-crop-box.html """
     """ 4点を指定してトリミングする。 """
 
+    if(not len(points)==4): #頂点の数が4つでないなら古いデータを使う
+        print("ないんじゃ～～")
+        points = read_savedPoints()
+    else:                   #頂点の数が4つなら古いデータ更新
+        update_points(points)
     points = sorted(points, key=lambda x:x[1])  # yが小さいもの順に並び替え。
     top = sorted(points[:2], key=lambda x:x[0])  # 前半二つは四角形の上。xで並び替えると左右も分かる。
     bottom = sorted(points[2:], key=lambda x:x[0], reverse=True)  # 後半二つは四角形の下。同じくxで並び替え。
     points = np.array(top + bottom, dtype='float32')  # 分離した二つを再結合。
-
     width = max(np.sqrt(((points[0][0]-points[2][0])**2)*2), np.sqrt(((points[1][0]-points[3][0])**2)*2))
     height = max(np.sqrt(((points[0][1]-points[2][1])**2)*2), np.sqrt(((points[1][1]-points[3][1])**2)*2))
 
@@ -32,21 +52,21 @@ def transform_by4(img, points):
             np.array([width-1, height-1]),
             np.array([0, height-1]),
             ], np.float32)
-
-    trans = cv2.getPerspectiveTransform(points, dst)  # 変換前の座標と変換後の座標の対応を渡すと、透視変換行列を作ってくれる。
-    return cv2.warpPerspective(img, trans, (int(width), int(height)))  # 透視変換行列を使って切り抜く。
+    trans = cv2.getPerspectiveTransform(points, dst)  # 変換前の座標と変換後の座標の対応を渡すと、透視変換行列を作ってくれる。(射影行列では？)
+    return cv2.warpPerspective(img, trans, (int(width), int(height)))  #ここで影を指定のサイズで受け取る
 
 def np_to_PIL(image):
     return Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
 def crop_image_along_line(image):
     blue, green, red = cv2.split(image)
-    diff = np.where(red >= green, red - (green.astype(np.uint16) * 3 // 10).astype(np.uint8), 0)
-    ret, thresh = cv2.threshold(diff, 150, 255, cv2.THRESH_BINARY)
+    diff = np.where(green >= red, green - (red.astype(np.uint16) * 10 // 10).astype(np.uint8), 0)
+    ret, thresh = cv2.threshold(diff, 50, 255, cv2.THRESH_BINARY)
     contours, hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contours.sort(key=cv2.contourArea, reverse=True)
     epsilon = 0.05 * cv2.arcLength(contours[0], True)
     approx = cv2.approxPolyDP(contours[0], epsilon, True)
+    cv2.imwrite("thresh.jpg", thresh)
 
     return transform_by4(image, approx[:, 0, :])
 
