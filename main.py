@@ -71,18 +71,20 @@ def get_max_file(directory_path):
     os.makedirs(directory_path, exist_ok=True)
     return max([0] + [int(f.name.split('.')[0]) for f in os.scandir(directory_path) if f.is_file() and f.name.split('.')[0].isdigit()])
 
-def crop_center(image, x, y, size):
+def crop_center(image, y, x, size):
     d = size // 2
     return image.crop((x - d, y - d, x + d + 1, y + d + 1))
 
 def random_position():
-    from random import randint
-    return randint(0, 85), randint(0, 135)
+    from random import randrange
+    return randrange(450), randrange(1400)
 
-def pick(y, x, indicator, arm):
-    base_x = -120
-    base_y = 75
-    half_x_point = 135
+def pick(y, x, indicator, arm, ratio):
+    x //= ratio
+    y //= ratio
+    base_x = -130
+    base_y = 70
+    half_x_point = 140
     arm.send_position(indicator * half_x_point + base_x + x, base_y + y)
     print(indicator * half_x_point + base_x + x, base_y + y)
     while True:
@@ -96,7 +98,9 @@ def main(model):
     OBJECT_NUM = 10
     picked_count = 0
     indicator = 0
-    
+    RATIO = 5  # the ratio of the arm position system to an image
+    os.makedirs('entire', exist_ok=True)
+
     arm = armCommunication('COM8',115200,0.01);
     save_dirctory = './models/' + str(get_max_dir('./models') + 1)
     os.makedirs(save_dirctory, exist_ok=True)
@@ -124,11 +128,10 @@ def main(model):
         print('cap')
         image = np_to_PIL(crop_image_along_line(capture()))
         print('done')
-        # TODO: crop and rotate an image alona a red rectangle
 
-        dh = image.height // 255
-        dw = image.width // 255
-        P = np.ndarray(shape=(image.height, image.width), dtype=float)
+        # dh = image.height // 255
+        # dw = image.width // 255
+        # P = np.ndarray(shape=(image.height, image.width), dtype=float)
 
         # with torch.no_grad():
         #     for h in range(INPUT_SIZE // 2, image.height - INPUT_SIZE // 2,  dh):
@@ -149,14 +152,16 @@ def main(model):
         # print(np.unravel_index(np.argmax(P), P.shape))
         h, w = random_position()
         try:
-            res = pick(h, w, indicator, arm)
+            res = pick(h, w, indicator, arm, RATIO)
         except Exception as e:
             print(e)
             continue
         picked_count += res
         print(picked_count)
-        image_save_path = './images/{}/{}.jpg'.format(res, get_max_file('./images/{}'.format(res)) + 1)
-        crop_center(image, w, h, INPUT_SIZE).save(image_save_path)
+        image_save_path = './images/{}/{}.jpg'.format(int(res), get_max_file('./images/{}'.format(int(res))) + 1)
+        crop_center(image, h, w, INPUT_SIZE).save(image_save_path)
+        image.save('./entire/{}.jpg'.format(get_max_file('./entire') + 1))
+
 
 
 if __name__ == "__main__":
