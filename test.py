@@ -34,7 +34,6 @@ def transform_by4(img, points):
     points = np.array(top + bottom, dtype='float32')  # 分離した二つを再結合。
     width = max(np.sqrt(((points[0][0]-points[2][0])**2)*2), np.sqrt(((points[1][0]-points[3][0])**2)*2))
     height = max(np.sqrt(((points[0][1]-points[2][1])**2)*2), np.sqrt(((points[1][1]-points[3][1])**2)*2))
-
     dst = np.array([
             np.array([0, 0]),
             np.array([width-1, 0]),
