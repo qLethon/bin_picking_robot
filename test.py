@@ -19,7 +19,7 @@ def read_savedPoints():
     pointsOldDataFile.close()
     return points
 
-def transform_by4(img, points):
+def transform_by4(img, points,width,height):
     """ copied from https://blanktar.jp/blog/2015/07/python-opencv-crop-box.html """
     """ 4点を指定してトリミングする。 """
 
@@ -32,8 +32,6 @@ def transform_by4(img, points):
     top = sorted(points[:2], key=lambda x:x[0])  # 前半二つは四角形の上。xで並び替えると左右も分かる。
     bottom = sorted(points[2:], key=lambda x:x[0], reverse=True)  # 後半二つは四角形の下。同じくxで並び替え。
     points = np.array(top + bottom, dtype='float32')  # 分離した二つを再結合。
-    width = max(np.sqrt(((points[0][0]-points[2][0])**2)*2), np.sqrt(((points[1][0]-points[3][0])**2)*2))
-    height = max(np.sqrt(((points[0][1]-points[2][1])**2)*2), np.sqrt(((points[1][1]-points[3][1])**2)*2))
     dst = np.array([
             np.array([0, 0]),
             np.array([width-1, 0]),
@@ -61,7 +59,7 @@ def transform_image(image):
     cv2.imshow("a", image)
     
     cv2.waitKey(0)
-    cv2.imwrite("tranformed.jpg", transform_by4(image, approx[:, 0, :]))
+    cv2.imwrite("tranformed.jpg", transform_by4(image, approx[:, 0, :],1400,450))
     
     cv2.waitKey(0)
     cv2.destroyAllWindows()

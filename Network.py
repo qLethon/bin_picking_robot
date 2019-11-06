@@ -65,9 +65,6 @@ class ValNet(AlexNet):
                     res[h].append(self._forward(x[:, :, h * dh:h * dh + INPUT_SIZE , w * dw:w * dw + INPUT_SIZE]))
 
         return torch.stack(res)
-                
-        
-
 
 class AlexNet2(nn.Module):
     #  for 65 x 65
@@ -101,6 +98,31 @@ class AlexNet2(nn.Module):
         x = self.dropout(F.relu(self.fc7(x)))
         x = self.fc8(x)
         
+        return x
+
+class FullyConvNet(nn.Module):
+
+    def __init__(self):
+        super(FullyConvNet, self).__init__()
+        self.conv1 = nn.Conv2d(3, 16, 9, padding=4)
+        self.conv2 = nn.Conv2d(16, 16, 5, padding=2)
+        # max_pool
+        self.conv3 = nn.Conv2d(16, 16, 5, padding=2)
+        self.conv4 = nn.Conv2d(16, 16, 5, padding=2)
+        # max_pool
+        self.conv5 = nn.Conv2d(16, 128, 19, padding=9)
+        self.conv6 = nn.Conv2d(128, 128, 1)
+        self.conv7 = nn.Conv2d(128, 1, 1)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.conv3(x)
+        x = self.conv4(x)
+        x = self.conv5(x)
+        x = self.conv6(x)
+        x = self.conv7(x)
+
         return x
 
 class Net(nn.Module):

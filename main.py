@@ -13,6 +13,12 @@ import argparse
 import cv2
 from serialTest.serialPackage import armCommunication
 
+
+ARM_RANGE_HEIGHT = 100
+ARM_RANGE_WIDTH = 262
+BASE_X = -138
+BASE_Y = 60
+
 def update_points(points):
     pointsOldDataFile = open('pointsOldData.csv','w')
     for _point in points:
@@ -21,30 +27,26 @@ def update_points(points):
     pointsOldDataFile.close()
 
 def read_savedPoints():
-    points = np.array([])
-    pointsOldDataFile = open('pointsOldData.csv','r')
-    for pointLineString_fromFile in pointsOldDataFile.readlines():
-        pointStrings = pointLineString_fromFile.split(",")
-        pointFloat = [float(p) for p in pointStrings]
-        np.insert(points,len(points),pointFloat, axis=0)
-    pointsOldDataFile.close()
+    points = []
+    with open('pointsOldData.csv','r') as f:
+        for pointLineString_fromFile in f:
+            pointStrings = pointLineString_fromFile.split(",")
+            points.append([float(p) for p in pointStrings])
     return points
 
-def transform_by4(img, points):
+def transform_by4(img, points, width, height):
     """ copied from https://blanktar.jp/blog/2015/07/python-opencv-crop-box.html """
     """ 4点を指定してトリミングする。 """
-
-    if(not len(points)==4): #頂点の数が4つでないなら古いデータを使う
+    if len(points) != 4: #頂点の数が4つでないなら古いデータを使う
         print("ないんじゃ～～")
         points = read_savedPoints()
     else:                   #頂点の数が4つなら古いデータ更新
         update_points(points)
+
     points = sorted(points, key=lambda x:x[1])  # yが小さいもの順に並び替え。
     top = sorted(points[:2], key=lambda x:x[0])  # 前半二つは四角形の上。xで並び替えると左右も分かる。
     bottom = sorted(points[2:], key=lambda x:x[0], reverse=True)  # 後半二つは四角形の下。同じくxで並び替え。
     points = np.array(top + bottom, dtype='float32')  # 分離した二つを再結合。
-    width = max(np.sqrt(((points[0][0]-points[2][0])**2)*2), np.sqrt(((points[1][0]-points[3][0])**2)*2))
-    height = max(np.sqrt(((points[0][1]-points[2][1])**2)*2), np.sqrt(((points[1][1]-points[3][1])**2)*2))
     dst = np.array([
             np.array([0, 0]),
             np.array([width-1, 0]),
@@ -57,17 +59,19 @@ def transform_by4(img, points):
 def np_to_PIL(image):
     return Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
-def crop_image_along_line(image):
+def crop_image_along_line(image, width, height):
     blue, green, red = cv2.split(image)
     diff = np.where(green >= red, green - (red.astype(np.uint16) * 10 // 10).astype(np.uint8), 0)
     ret, thresh = cv2.threshold(diff, 50, 255, cv2.THRESH_BINARY)
+    kernel = np.ones((50,50),np.uint8)
+    thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
     contours, hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contours.sort(key=cv2.contourArea, reverse=True)
     epsilon = 0.05 * cv2.arcLength(contours[0], True)
     approx = cv2.approxPolyDP(contours[0], epsilon, True)
     cv2.imwrite("thresh.jpg", thresh)
 
-    return transform_by4(image, approx[:, 0, :])
+    return transform_by4(image, approx[:, 0, :], width, height)
 
 cam = cv2.VideoCapture(2)
 cam.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
@@ -79,8 +83,6 @@ def capture():
         print('cannnot read')
     # return Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
     return frame
-
-
 
 def get_max_dir(directory_path):
     os.makedirs(directory_path, exist_ok=True)
@@ -94,33 +96,33 @@ def crop_center(image, y, x, size):
     d = size // 2
     return image.crop((x - d, y - d, x + d + 1, y + d + 1))
 
-def random_position():
+def random_position(height, width, ratio):
     from random import randrange
-    return randrange(450), randrange(1400)
+    return randrange(height * ratio), randrange(width * ratio // 2)
 
 def pick(y, x, indicator, arm, ratio):
     x //= ratio
     y //= ratio
-    base_x = -130
-    base_y = 70
-    half_x_point = 140
-    arm.send_position(indicator * half_x_point + base_x + x, base_y + y)
-    print(indicator * half_x_point + base_x + x, base_y + y)
+    y = ARM_RANGE_HEIGHT - y
+    half_x_point = ARM_RANGE_WIDTH // 2
+    arm.send_position(indicator * half_x_point + BASE_X + x, BASE_Y + y)
+    print(indicator * half_x_point + BASE_X + x, BASE_Y + y)
     while True:
         res = arm.read_one_byte()
+        print(res)
         if res != 0:
             return res == 11
 
 def main(model):
     INPUT_SIZE = 129
     BATCH = 256
-    OBJECT_NUM = 10
+    OBJECT_NUM = 1
     picked_count = 0
     indicator = 0
-    RATIO = 5  # the ratio of the arm position system to an image
+    RATIO = 4  # the ratio of the arm position system to an image
     os.makedirs('entire', exist_ok=True)
     
-    arm = armCommunication('COM8',115200,0.01);
+    arm = armCommunication('COM8', 115200, 20);
     save_dirctory = './models/' + str(get_max_dir('./models') + 1)
     os.makedirs(save_dirctory, exist_ok=True)
     net = AlexNet()
@@ -145,7 +147,8 @@ def main(model):
             indicator = (indicator + 1) & 1
 
         print('cap')
-        image = np_to_PIL(crop_image_along_line(capture()))
+        image = np_to_PIL(crop_image_along_line(capture(), ARM_RANGE_WIDTH * RATIO, ARM_RANGE_HEIGHT * RATIO))
+        print(image.size)
         print('done')
 
         # dh = image.height // 255
@@ -169,16 +172,17 @@ def main(model):
 
         # max_h, max_w = np.unravel_index(np.argmax(P), P.shape)
         # print(np.unravel_index(np.argmax(P), P.shape))
-        h, w = random_position()
+        h, w = random_position(ARM_RANGE_HEIGHT, ARM_RANGE_WIDTH, RATIO)
         try:
-            res = pick(h, w, indicator, arm, RATIO)
+            res = pick(h, w, indicator, arm, RATIO)  # the position on the half image
         except Exception as e:
             print(e)
             continue
         picked_count += res
         print(picked_count)
         image_save_path = './images/{}/{}.jpg'.format(int(res), get_max_file('./images/{}'.format(int(res))) + 1)
-        crop_center(image, h, w, INPUT_SIZE).save(image_save_path)
+        crop_center(image, h, w + RATIO * ARM_RANGE_WIDTH // 2 * indicator, INPUT_SIZE).save(image_save_path)
+        print("ind: {}".format(indicator), h, w + RATIO * ARM_RANGE_WIDTH // 2 * indicator)
         image.save('./entire/{}.jpg'.format(get_max_file('./entire') + 1))
 
 

@@ -26,7 +26,6 @@ class armCommunication:
 			byteReveiveData = self.ser.read(1)#1byte受信(1行読み込むならreadline)
 			reseiveData = int.from_bytes(byteReveiveData, 'big')#byte型に変換
 			return reseiveData;
-		except self.ser.timeout as e: #タイムアウト(USBが接続されてないと出すらしい)(「何かしらのデータを受信しなかったら」ではない)
+		except : #タイムアウト(USBが接続されてないと出すらしい)(「何かしらのデータを受信しなかったら」ではない)
 			print("error") #ここで停止はしない
-			self.ser.close()
-			raise e
+			return -1
