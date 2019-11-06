@@ -26,7 +26,7 @@ def read_savedPoints():
     for pointLineString_fromFile in pointsOldDataFile.readlines():
         pointStrings = pointLineString_fromFile.split(",")
         pointFloat = [float(p) for p in pointStrings]
-        points.insert(pointFloat,len(points))
+        np.insert(points,len(points),pointFloat, axis=0)
     pointsOldDataFile.close()
     return points
 

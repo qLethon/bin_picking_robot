@@ -15,7 +15,7 @@ def read_savedPoints():
     for pointLineString_fromFile in pointsOldDataFile.readlines():
         pointStrings = pointLineString_fromFile.split(",")
         pointFloat = [float(p) for p in pointStrings]
-        np.insert(points,pointFloat,len(points), axis=0)
+        np.insert(points,len(points),pointFloat, axis=0)
     pointsOldDataFile.close()
     return points
 
@@ -76,5 +76,5 @@ def capture(num):
     cam.release()
     return Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
-#capture(2).save('a.jpg')
+capture(2).save('a.jpg')
 transform_image(cv2.imread('a.jpg'))
