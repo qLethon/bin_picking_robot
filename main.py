@@ -116,18 +116,18 @@ def pick(y, x, indicator, arm, ratio):
 
 def counter(res):
     result = []
-    with open('random_count.txt') as f:
+    with open('day1.txt') as f:
         for line in f:
             result = [int(l) for l in line.split()]
     
-    with open('random_count.txt', 'w') as f:
+    with open('day1.txt', 'w') as f:
         result[int(res)] += 1
         print(*result, file=f)
 
 
 def main(model):
     INPUT_SIZE = 129
-    BATCH = 256
+    BATCH = ARM_RANGE_WIDTH // 2
     OBJECT_NUM = 1
     picked_count = 0
     indicator = 0
@@ -136,7 +136,7 @@ def main(model):
     
     arm = armCommunication('COM8', 115200, 20)
     save_dirctory = './models/' + str(get_max_dir('./models') + 1)
-    os.makedirs(save_dirctory, exist_ok=True)
+    # os.makedirs(save_dirctory, exist_ok=True)
     net = AlexNet()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(device)
@@ -145,7 +145,10 @@ def main(model):
         net.load_state_dict(torch.load(model))
     net.eval()
     sigmoid = nn.Sigmoid()
-    to_tensor = transforms.ToTensor()
+    transform = transforms.Compose(
+        [transforms.ToTensor(),
+        transforms.Normalize(tuple([0.5] * 3), tuple([0.5] * 3))]
+    )
 
     for i in range(int(1e6)):
         # if i != 0 and (i == 100 or i % 500 == 0):
@@ -163,45 +166,39 @@ def main(model):
         print(image.size)
         print('done')
 
-        # dh = image.height // 255
-        # dw = image.width // 255
-        # P = np.ndarray(shape=(image.height, image.width), dtype=float)
+        P = np.zeros(shape=(ARM_RANGE_HEIGHT, ARM_RANGE_WIDTH), dtype=np.float16)
 
-        # with torch.no_grad():
-        #     for h in range(INPUT_SIZE // 2, image.height - INPUT_SIZE // 2,  dh):
-        #         for w in range(INPUT_SIZE // 2, image.width - INPUT_SIZE // 2, dw * BATCH):
-        #             input_images = []
-        #             BW = list(range(w, min(image.width - INPUT_SIZE // 2, w + BATCH * dw), dw))
-        #             for bw in BW:
-        #                 input_image = crop_center(image, bw, h, INPUT_SIZE)
-        #                 input_images.append(to_tensor(input_image))
-        #             outputs = sigmoid(net(torch.stack(input_images).to(device)))
-        #             print(h, w)
+        with torch.no_grad():
+            for h in range(ARM_RANGE_HEIGHT):
+                for w in range(ARM_RANGE_WIDTH // 2):
+                    input_images = []
+                    input_images.append(transform(crop_center(image, h * RATIO, (w + indicator * ARM_RANGE_WIDTH // 2) * RATIO, INPUT_SIZE)))
+                
+                outputs = sigmoid(net(torch.stack(input_images).to(device)))
                     
-        #             for batch, bw in enumerate(BW):
-        #                 P[h][bw] = outputs[batch]
+                for w in range(ARM_RANGE_WIDTH):
+                    P[h][w + indicator * ARM_RANGE_WIDTH // 2] = outputs[w]
 
 
-        # max_h, max_w = np.unravel_index(np.argmax(P), P.shape)
+        h, w = np.unravel_index(np.argmax(P), P.shape)
+        h *= RATIO
+        w *= RATIO
         # print(np.unravel_index(np.argmax(P), P.shape))
-        h, w = random_position(ARM_RANGE_HEIGHT, ARM_RANGE_WIDTH, RATIO)
-        imageCrop = crop_center(image, h, w + RATIO * ARM_RANGE_WIDTH // 2 * indicator, INPUT_SIZE)
-        time.sleep(1)
+        # h, w = random_position(ARM_RANGE_HEIGHT, ARM_RANGE_WIDTH, RATIO)
+        time.sleep(1)  # what is this?
         try:
             res = pick(h, w, indicator, arm, RATIO)  # the position on the half image
         except Exception as e:
             print(e)
             continue
         picked_count += res
-        print(picked_count)
         image_save_path = './images/{}/{}.jpg'.format(int(res), get_max_file('./images/{}'.format(int(res))) + 1)
-        imageCrop.save(image_save_path)
-        print("ind: {}".format(indicator), h, w + RATIO * ARM_RANGE_WIDTH // 2 * indicator)
+        crop_center(image, h, w + RATIO * ARM_RANGE_WIDTH // 2 * indicator, INPUT_SIZE).save(image_save_path)
         image.save('./entire/{}.jpg'.format(get_max_file('./entire') + 1))
         counter(res)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-m', '--model', type=str)
+    parser.add_argument('-m', '--model', type=str, default='70.pth')
     args = parser.parse_args()
     main(args.model)

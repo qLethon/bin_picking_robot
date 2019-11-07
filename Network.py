@@ -5,7 +5,7 @@ import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
 import os
-
+import argparse
 
 class AlexNet(nn.Module):
     #  for 129 x 129
@@ -148,17 +148,18 @@ class Net(nn.Module):
         return x
 
 
-def train(save_path):
+def train(save_dir):
+    BATCH = 32
 
     transform = transforms.Compose(
         [transforms.ToTensor(),
         transforms.Normalize(tuple([0.5] * 3), tuple([0.5] * 3))]
     )
     trainset = torchvision.datasets.ImageFolder('./images', transform=transform)
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=8, shuffle=True, num_workers=2)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=BATCH, shuffle=True, num_workers=2)
 
-    # testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
-    # testloader = torch.utils.data.DataLoader(testset, batch_size=4, shuffle=False, num_workers=2)
+    testset = torchvision.datasets.ImageFolder('./data', transform=transform)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=BATCH, shuffle=False, num_workers=2)
 
     net = AlexNet()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -169,92 +170,58 @@ def train(save_path):
     invalid_num = len([path for path in os.listdir('./images/0') if os.path.isfile(os.path.join('./images/0', path))])
     valid_num = len([path for path in os.listdir('./images/1') if os.path.isfile(os.path.join('./images/1', path))])
     criterion = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([invalid_num / valid_num]).to(device))
-    # criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optim.SGD(net.parameters(), lr=0.0001, momentum=0.9)
+    sigmoid = nn.Sigmoid()
 
-    
-    for epoch in range(25):
+    for epoch in range(5000):
         running_loss = 0.0
         for i, data in enumerate(trainloader):
             inputs, labels = data[0].to(device), data[1].view(-1, 1).float().to(device)
             optimizer.zero_grad()
 
             outputs = net(inputs)
-            m = nn.Softmax()
-            # print(outputs, labels)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
 
             running_loss += loss.item()
-            if i % 2000 == 1999:
-                print('[%d, %5d] loss: %.3f' % 
-                    (epoch + 1, i + 1, running_loss / 2000))
-                running_loss = 0.0
-        print('[%d] loss: %.3f' % 
-            (epoch + 1, running_loss / (invalid_num + valid_num)))
+        train_loss = running_loss / ((invalid_num + valid_num + BATCH - 1) // BATCH)
+        print('[{}] loss: {}'.format(epoch + 1, train_loss))
+        with open(os.path.join(save_dir, "loss.log"), 'a') as f:
+            print(epoch + 1, train_loss, file=f)
+        if epoch % 10 == 0:
+            torch.save(net.state_dict(), os.path.join(save_dir, "{}.pth".format(epoch)))
+            correct = 0
+            total = 0
+            val_loss = 0
+            net.eval()
+            with torch.no_grad():
+                for data in testloader:
+                    inputs, labels = data[0].to(device), data[1].view(-1, 1).float().to(device)
+                    outputs = net(inputs)
+                    val_loss += criterion(outputs, labels).item()
+                    results = sigmoid(outputs)
+                    total += labels.size(0)
+                    correct += (results.round() == labels).sum().item()
+            net.train()
 
-    print('Finished Training')
-    torch.save(net.state_dict(), save_path)
+            val_loss /= (len(testset) + BATCH - 1) // BATCH
+            acc = correct / total
+            print('[{}] acc: {}'.format(epoch + 1, acc))
+            print('[{}] val: {}'.format(epoch + 1, val_loss))
+            with open(os.path.join(save_dir, "acc.log"), 'a') as f:
+                print(epoch + 1, acc, file=f)
+            with open(os.path.join(save_dir, "val.log"), 'a') as f:
+                print(epoch + 1, val_loss, file=f)
 
-def probability_to_green_image_array(P):
-    import numpy as np
-    green = np.zeros((P.shape[0], P.shape[1], 3), dtype=np.uint8)
-    for h in range(P.shape[0]):
-        for w in range(P.shape[1]):
-            green[h][w][1] = P[h][w] * 255
-
-    return green
-
-def make_train_set(model, images_path):
-    import numpy as np
-    from PIL import Image
-
-    basic_path = "dataset"
-    os.makedirs("dataset", exist_ok=True)
-    INPUT_SIZE = 129
-    BATCH = 250
-
-    net = AlexNet()
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    print(device)
-    net.to(device)
-    if model is not None:
-        net.load_state_dict(torch.load(model))
-    net.eval()
-    sigmoid = nn.Sigmoid()
-    to_tensor = transforms.ToTensor()
-
-    images = [f.path for f in os.scandir(images_path) if f.is_file()]
-
-    for image_path in images:
-        image = Image.open(image_path)
-        image_tensor = to_tensor(image).to(device)
-        print(image_tensor.size())
-        # P = np.zeros((image.height, image.width), dtype=np.float16)
-        P = np.random.rand(image.height, image.width)
-        with torch.no_grad():
-            for h in range(image.height):
-                for w in range(image.width // BATCH):
-                    # input_images = [image_tensor[:, max(0, h - INPUT_SIZE // 2):h + INPUT_SIZE // 2 + 1, rw - 129 // 2:rw + INPUT_SIZE // 2 + 1] for rw in range(w, w + BATCH)]
-                    # outputs = sigmoid(net(torch.stack(input_images)))
-                    # for i, rw in enumerate(w, w + BATCH):
-                    #     P[h][rw] = outputs[i]
-                    print('kyomu')
-
-            save_path = os.path.join(basic_path, os.path.basename(image_path).split()[0])
-            with open(save_path, 'w') as f:
-                for p in P:
-                    print(*p, file=f)
-            P *= 255
-            overray = Image.fromarray(probability_to_green_image_array(P))
-            blended = Image.blend(image, overray, alpha=0.3)
-            blended.show()
-            blended.save('belended.jpg')
-
-        
+    print('Finished Training, save to' + save_dir)
+    torch.save(net.state_dict(), os.path.join(save_dir, "final.pth"))
 
 if __name__ == "__main__":
     import multiprocessing
     multiprocessing.set_start_method('spawn', True)
-    train('test.pth')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-s', '--savedir', type=str, required=True)
+    args = parser.parse_args()
+    os.makedirs(args.savedir, exist_ok=True)
+    train(args.savedir)
