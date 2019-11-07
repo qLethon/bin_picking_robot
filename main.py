@@ -1,4 +1,5 @@
 import torch
+import time
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
@@ -14,10 +15,10 @@ import cv2
 from serialTest.serialPackage import armCommunication
 
 
-ARM_RANGE_HEIGHT = 100
-ARM_RANGE_WIDTH = 262
-BASE_X = -138
-BASE_Y = 60
+ARM_RANGE_HEIGHT = 87
+ARM_RANGE_WIDTH = 250
+BASE_X = -125
+BASE_Y = 68
 
 def update_points(points):
     pointsOldDataFile = open('pointsOldData.csv','w')
@@ -113,6 +114,17 @@ def pick(y, x, indicator, arm, ratio):
         if res != 0:
             return res == 11
 
+def counter(res):
+    result = []
+    with open('random_count.txt') as f:
+        for line in f:
+            result = [int(l) for l in line.split()]
+    
+    with open('random_count.txt', 'w') as f:
+        result[int(res)] += 1
+        print(*result, file=f)
+
+
 def main(model):
     INPUT_SIZE = 129
     BATCH = 256
@@ -122,7 +134,7 @@ def main(model):
     RATIO = 4  # the ratio of the arm position system to an image
     os.makedirs('entire', exist_ok=True)
     
-    arm = armCommunication('COM8', 115200, 20);
+    arm = armCommunication('COM8', 115200, 20)
     save_dirctory = './models/' + str(get_max_dir('./models') + 1)
     os.makedirs(save_dirctory, exist_ok=True)
     net = AlexNet()
@@ -136,11 +148,11 @@ def main(model):
     to_tensor = transforms.ToTensor()
 
     for i in range(int(1e6)):
-        if i != 0 and (i == 100 or i % 500 == 0):
-            model_save_path = os.path.join(save_dirctory, '{}.pth'.format(i))
-            train(os.path.join(model_save_path))
-            net.load_state_dict(torch.load(model_save_path))
-            net.eval()
+        # if i != 0 and (i == 100 or i % 500 == 0):
+        #     model_save_path = os.path.join(save_dirctory, '{}.pth'.format(i))
+        #     train(os.path.join(model_save_path))
+        #     net.load_state_dict(torch.load(model_save_path))
+        #     net.eval()
 
         if picked_count >= OBJECT_NUM:
             picked_count = 0
@@ -173,6 +185,8 @@ def main(model):
         # max_h, max_w = np.unravel_index(np.argmax(P), P.shape)
         # print(np.unravel_index(np.argmax(P), P.shape))
         h, w = random_position(ARM_RANGE_HEIGHT, ARM_RANGE_WIDTH, RATIO)
+        imageCrop = crop_center(image, h, w + RATIO * ARM_RANGE_WIDTH // 2 * indicator, INPUT_SIZE)
+        time.sleep(1)
         try:
             res = pick(h, w, indicator, arm, RATIO)  # the position on the half image
         except Exception as e:
@@ -181,10 +195,10 @@ def main(model):
         picked_count += res
         print(picked_count)
         image_save_path = './images/{}/{}.jpg'.format(int(res), get_max_file('./images/{}'.format(int(res))) + 1)
-        crop_center(image, h, w + RATIO * ARM_RANGE_WIDTH // 2 * indicator, INPUT_SIZE).save(image_save_path)
+        imageCrop.save(image_save_path)
         print("ind: {}".format(indicator), h, w + RATIO * ARM_RANGE_WIDTH // 2 * indicator)
         image.save('./entire/{}.jpg'.format(get_max_file('./entire') + 1))
-
+        counter(res)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

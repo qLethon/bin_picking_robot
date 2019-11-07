@@ -197,6 +197,63 @@ def train(save_path):
     print('Finished Training')
     torch.save(net.state_dict(), save_path)
 
+def probability_to_green_image_array(P):
+    import numpy as np
+    green = np.zeros((P.shape[0], P.shape[1], 3), dtype=np.uint8)
+    for h in range(P.shape[0]):
+        for w in range(P.shape[1]):
+            green[h][w][1] = P[h][w] * 255
+
+    return green
+
+def make_train_set(model, images_path):
+    import numpy as np
+    from PIL import Image
+
+    basic_path = "dataset"
+    os.makedirs("dataset", exist_ok=True)
+    INPUT_SIZE = 129
+    BATCH = 250
+
+    net = AlexNet()
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(device)
+    net.to(device)
+    if model is not None:
+        net.load_state_dict(torch.load(model))
+    net.eval()
+    sigmoid = nn.Sigmoid()
+    to_tensor = transforms.ToTensor()
+
+    images = [f.path for f in os.scandir(images_path) if f.is_file()]
+
+    for image_path in images:
+        image = Image.open(image_path)
+        image_tensor = to_tensor(image).to(device)
+        print(image_tensor.size())
+        # P = np.zeros((image.height, image.width), dtype=np.float16)
+        P = np.random.rand(image.height, image.width)
+        with torch.no_grad():
+            for h in range(image.height):
+                for w in range(image.width // BATCH):
+                    # input_images = [image_tensor[:, max(0, h - INPUT_SIZE // 2):h + INPUT_SIZE // 2 + 1, rw - 129 // 2:rw + INPUT_SIZE // 2 + 1] for rw in range(w, w + BATCH)]
+                    # outputs = sigmoid(net(torch.stack(input_images)))
+                    # for i, rw in enumerate(w, w + BATCH):
+                    #     P[h][rw] = outputs[i]
+                    print('kyomu')
+
+            save_path = os.path.join(basic_path, os.path.basename(image_path).split()[0])
+            with open(save_path, 'w') as f:
+                for p in P:
+                    print(*p, file=f)
+            P *= 255
+            overray = Image.fromarray(probability_to_green_image_array(P))
+            blended = Image.blend(image, overray, alpha=0.3)
+            blended.show()
+            blended.save('belended.jpg')
+
+        
+
 if __name__ == "__main__":
     import multiprocessing
     multiprocessing.set_start_method('spawn', True)
