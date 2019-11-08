@@ -36,7 +36,7 @@ def make_train_set(model, images_path):
     basic_path = "dataset"
     os.makedirs("dataset", exist_ok=True)
     INPUT_SIZE = 129
-    BATCH = 250
+    BATCH = 500
 
     net = AlexNet()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -65,14 +65,19 @@ def make_train_set(model, images_path):
                     # input_images = [image_tensor[:, max(0, h - INPUT_SIZE // 2):h + INPUT_SIZE // 2 + 1, rw - 129 // 2:rw + INPUT_SIZE // 2 + 1] for rw in range(w, w + BATCH)]
                     input_images = [transform(crop_center(image, h, rw, INPUT_SIZE)).to(device) for rw in range(w, w + BATCH)]
                     outputs = sigmoid(net(torch.stack(input_images)))
-                    for i, rw in enumerate(range(w, w + BATCH)):
-                        P[h][rw] = outputs[i]
+                    for i, output in enumerate(outputs):
+                        P[h][w + i] = output
 
-            save_path = os.path.join(basic_path, os.path.basename(image_path).split()[0])
-            overray = Image.fromarray(probability_to_green_image_array(P))
-            blended = Image.blend(image, overray, alpha=0.5)
-            blended.show()
-            blended.save('belended.jpg')
+            save_path = os.path.join(basic_path, os.path.basename(image_path).split('.')[0])
+            with open(save_path, 'w') as f:
+                for p in P:
+                    for q in p:
+                        print(q, end=' ', file=f)
+                    print(file=f)
+            # overray = Image.fromarray(probability_to_green_image_array(P))
+            # blended = Image.blend(image, overray, alpha=0.5)
+            # blended.show()
+            # blended.save('belended.jpg')
 
 def valid(model_path, image_path):
     basic_path = "dataset"
