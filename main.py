@@ -13,6 +13,7 @@ import numpy as np
 import argparse
 import cv2
 from serialTest.serialPackage import armCommunication
+from collections import deque
 
 
 ARM_RANGE_HEIGHT = 87
@@ -148,6 +149,7 @@ def main(model):
         [transforms.ToTensor(),
         transforms.Normalize(tuple([0.5] * 3), tuple([0.5] * 3))]
     )
+    latest_positions = deque([(0, 0) for i in range(5)], maxlen=5)
 
     for i in range(int(1e6)):
         # if i != 0 and (i == 100 or i % 500 == 0):
@@ -179,26 +181,27 @@ def main(model):
                 for w in range(ARM_RANGE_WIDTH // 2):
                     P[h][w + indicator * ARM_RANGE_WIDTH // 2] = outputs[w]
 
-        for i in range(10):
-            h, w = np.unravel_index(np.argmax(P), P.shape)
-            P[h][w] = 0
-            h *= RATIO
-            w *= RATIO
-            # print(np.unravel_index(np.argmax(P), P.shape))
-            # h, w = random_position(ARM_RANGE_HEIGHT, ARM_RANGE_WIDTH, RATIO)
-            time.sleep(1)  # what is this?
-            try:
-                res = pick(h, w, arm, RATIO)  # the position on the full image
-            except Exception as e:
-                print(e)
-                continue
-            picked_count += res
-            image_save_path = './images/{}/{}.jpg'.format(int(res), get_max_file('./images/{}'.format(int(res))) + 1)
-            crop_center(image, h, w, INPUT_SIZE).save(image_save_path)
-            image.save('./entire/{}.jpg'.format(get_max_file('./entire') + 1))
-            counter(res)
-            if res:
-                break
+        
+        for i, (h, w) in enumerate(latest_positions, 1):
+            for y in range(h - i, h + i + 1):
+                for x in range(w - i, w + i + 1):
+                    P[y][x] = 0
+        h, w = np.unravel_index(np.argmax(P), P.shape)
+        print("probability:", P[h][w])
+        latest_positions.append((h, w))
+        h *= RATIO
+        w *= RATIO
+        time.sleep(1)  # what is this?
+        try:
+            res = pick(h, w, arm, RATIO)  # the position on the full image
+        except Exception as e:
+            print(e)
+            continue
+        picked_count += res
+        image_save_path = './images/{}/{}.jpg'.format(int(res), get_max_file('./images/{}'.format(int(res))) + 1)
+        crop_center(image, h, w, INPUT_SIZE).save(image_save_path)
+        image.save('./entire/{}.jpg'.format(get_max_file('./entire') + 1))
+        counter(res)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
