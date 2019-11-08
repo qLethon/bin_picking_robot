@@ -183,8 +183,8 @@ def main(model):
 
         
         for i, (h, w) in enumerate(latest_positions, 1):
-            for y in range(h - i, h + i + 1):
-                for x in range(w - i, w + i + 1):
+            for y in range(max(0, h - i), min(ARM_RANGE_HEIGHT, h + i + 1)):
+                for x in range(max(0, w - i), min(ARM_RANGE_WIDTH, w + i + 1)):
                     P[y][x] = 0
         h, w = np.unravel_index(np.argmax(P), P.shape)
         print("probability:", P[h][w])
