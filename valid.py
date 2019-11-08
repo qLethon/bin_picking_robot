@@ -21,8 +21,6 @@ def probability_to_green_image_array(P, ph=None, pw=None):
         for w in range(P.shape[1]):
             green[h][w][1] = P[h][w]
 
-    if ph is None and pw is None:
-        green[h][w][2] = 255
     return green
 
 def make_train_set(model, images_path):

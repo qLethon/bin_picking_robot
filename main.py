@@ -125,6 +125,14 @@ def counter(res):
         result[int(res)] += 1
         print(*result, file=f)
 
+def add_red_point(pil_image, h, w):
+    im = np.array(pil_image)
+    for i in range(3):
+        im[h][w][i] = 0
+    im[h][w][0] = 255
+
+    return Image.fromarray(im)
+
 
 def main(model):
     INPUT_SIZE = 129
@@ -191,8 +199,8 @@ def main(model):
         h, w = np.unravel_index(np.argmax(P), P.shape)
         print("probability:", P[h][w])
 
-        overray = Image.fromarray(probability_to_green_image_array(P, h, w)).resize((ARM_RANGE_WIDTH * RATIO, ARM_RANGE_HEIGHT * RATIO))
-        blended = Image.blend(image, overray, alpha=0.5)
+        overray = Image.fromarray(probability_to_green_image_array(P)).resize((ARM_RANGE_WIDTH * RATIO, ARM_RANGE_HEIGHT * RATIO))
+        blended = add_red_point(Image.blend(image, overray, alpha=0.5), h * RATIO, w * RATIO)
         blended.show()
 
         latest_positions.append((h, w))
