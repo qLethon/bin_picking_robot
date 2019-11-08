@@ -163,6 +163,7 @@ def main(model):
 
         print('cap')
         image = np_to_PIL(crop_image_along_line(capture(), ARM_RANGE_WIDTH * RATIO, ARM_RANGE_HEIGHT * RATIO))
+        # image = Image.open('test/2539.jpg')
         print(image.size)
         print('done')
 
@@ -170,32 +171,35 @@ def main(model):
 
         with torch.no_grad():
             for h in range(ARM_RANGE_HEIGHT):
+                input_images = []
                 for w in range(ARM_RANGE_WIDTH // 2):
-                    input_images = []
                     input_images.append(transform(crop_center(image, h * RATIO, (w + indicator * ARM_RANGE_WIDTH // 2) * RATIO, INPUT_SIZE)))
                 
                 outputs = sigmoid(net(torch.stack(input_images).to(device)))
                     
-                for w in range(ARM_RANGE_WIDTH):
+                for w in range(ARM_RANGE_WIDTH // 2):
                     P[h][w + indicator * ARM_RANGE_WIDTH // 2] = outputs[w]
 
-
-        h, w = np.unravel_index(np.argmax(P), P.shape)
-        h *= RATIO
-        w *= RATIO
-        # print(np.unravel_index(np.argmax(P), P.shape))
-        # h, w = random_position(ARM_RANGE_HEIGHT, ARM_RANGE_WIDTH, RATIO)
-        time.sleep(1)  # what is this?
-        try:
-            res = pick(h, w, indicator, arm, RATIO)  # the position on the half image
-        except Exception as e:
-            print(e)
-            continue
-        picked_count += res
-        image_save_path = './images/{}/{}.jpg'.format(int(res), get_max_file('./images/{}'.format(int(res))) + 1)
-        crop_center(image, h, w + RATIO * ARM_RANGE_WIDTH // 2 * indicator, INPUT_SIZE).save(image_save_path)
-        image.save('./entire/{}.jpg'.format(get_max_file('./entire') + 1))
-        counter(res)
+        for i in range(10):
+            h, w = np.unravel_index(np.argmax(P), P.shape)
+            P[h][w] = 0
+            h *= RATIO
+            w *= RATIO
+            # print(np.unravel_index(np.argmax(P), P.shape))
+            # h, w = random_position(ARM_RANGE_HEIGHT, ARM_RANGE_WIDTH, RATIO)
+            time.sleep(1)  # what is this?
+            try:
+                res = pick(h, w, indicator, arm, RATIO)  # the position on the half image
+            except Exception as e:
+                print(e)
+                continue
+            picked_count += res
+            image_save_path = './images/{}/{}.jpg'.format(int(res), get_max_file('./images/{}'.format(int(res))) + 1)
+            crop_center(image, h, w, INPUT_SIZE).save(image_save_path)
+            image.save('./entire/{}.jpg'.format(get_max_file('./entire') + 1))
+            counter(res)
+            if res:
+                break
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
