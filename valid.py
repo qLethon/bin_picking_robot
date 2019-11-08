@@ -13,7 +13,7 @@ import Network
 from Network import AlexNet
 
 
-def probability_to_green_image_array(P):
+def probability_to_green_image_array(P, ph=None, pw=None):
     import numpy as np
     P *= 255
     green = np.zeros((P.shape[0], P.shape[1], 3), dtype=np.uint8)
@@ -21,13 +21,8 @@ def probability_to_green_image_array(P):
         for w in range(P.shape[1]):
             green[h][w][1] = P[h][w]
 
-    return green
-
-def probability_to_green_image_array(P, h, w):
-    import numpy as np
-    green = probability_to_green_image_array(P)
-    P[h][w][2] = 255
-
+    if ph is None and pw is None:
+        green[h][w][2] = 255
     return green
 
 def make_train_set(model, images_path):
