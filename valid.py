@@ -23,6 +23,13 @@ def probability_to_green_image_array(P):
 
     return green
 
+def probability_to_green_image_array(P, h, w):
+    import numpy as np
+    green = probability_to_green_image_array(P)
+    P[h][w][2] = 255
+
+    return green
+
 def make_train_set(model, images_path):
     from main import crop_center
 

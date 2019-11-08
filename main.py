@@ -14,6 +14,7 @@ import argparse
 import cv2
 from serialTest.serialPackage import armCommunication
 from collections import deque
+from valid import probability_to_green_image_array
 
 
 ARM_RANGE_HEIGHT = 87
@@ -128,7 +129,7 @@ def counter(res):
 def main(model):
     INPUT_SIZE = 129
     BATCH = ARM_RANGE_WIDTH // 2
-    OBJECT_NUM = 1
+    OBJECT_NUM = 3
     picked_count = 0
     indicator = 0
     RATIO = 4  # the ratio of the arm position system to an image
@@ -183,11 +184,17 @@ def main(model):
 
         
         for i, (h, w) in enumerate(latest_positions, 1):
-            for y in range(max(0, h - i), min(ARM_RANGE_HEIGHT, h + i + 1)):
-                for x in range(max(0, w - i), min(ARM_RANGE_WIDTH, w + i + 1)):
+            for y in range(max(0, h - i ** 2), min(ARM_RANGE_HEIGHT, h + i ** 2 + 1)):
+                for x in range(max(0, w - i ** 2), min(ARM_RANGE_WIDTH, w + i ** 2 + 1)):
                     P[y][x] = 0
+
         h, w = np.unravel_index(np.argmax(P), P.shape)
         print("probability:", P[h][w])
+
+        overray = Image.fromarray(probability_to_green_image_array(P, h, w)).resize((ARM_RANGE_WIDTH * RATIO, ARM_RANGE_HEIGHT * RATIO))
+        blended = Image.blend(image, overray, alpha=0.5)
+        blended.show()
+
         latest_positions.append((h, w))
         h *= RATIO
         w *= RATIO

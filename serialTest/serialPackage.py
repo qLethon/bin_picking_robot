@@ -11,6 +11,10 @@ class armCommunication:
 		self.ser.reset_input_buffer()#受信バッファのクリア
 	
 	def send_position(self,x,y):
+		print(x,y)
+		x=int(x)
+		y=int(y)
+		print(x,y)
 		byteSendData =['s'.encode('utf-8')] 
 		byteSendData.append(((x&0xff00)>>8).to_bytes(1,'big'))
 		byteSendData.append((x&0xff).to_bytes(1,'big'))
