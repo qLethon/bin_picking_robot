@@ -101,13 +101,12 @@ def random_position(height, width, ratio):
     from random import randrange
     return randrange(height * ratio), randrange(width * ratio // 2)
 
-def pick(y, x, indicator, arm, ratio):
+def pick(y, x, arm, ratio):
     x //= ratio
     y //= ratio
     y = ARM_RANGE_HEIGHT - y
-    half_x_point = ARM_RANGE_WIDTH // 2
-    arm.send_position(indicator * half_x_point + BASE_X + x, BASE_Y + y)
-    print(indicator * half_x_point + BASE_X + x, BASE_Y + y)
+    arm.send_position(BASE_X + x, BASE_Y + y)
+    print(BASE_X + x, BASE_Y + y)
     while True:
         res = arm.read_one_byte()
         print(res)
@@ -189,7 +188,7 @@ def main(model):
             # h, w = random_position(ARM_RANGE_HEIGHT, ARM_RANGE_WIDTH, RATIO)
             time.sleep(1)  # what is this?
             try:
-                res = pick(h, w, indicator, arm, RATIO)  # the position on the half image
+                res = pick(h, w, arm, RATIO)  # the position on the full image
             except Exception as e:
                 print(e)
                 continue
