@@ -13,7 +13,7 @@ import Network
 from Network import AlexNet
 
 
-def probability_to_green_image_array(P):
+def probability_to_green_image_array(P, ph=None, pw=None):
     import numpy as np
     P *= 255
     green = np.zeros((P.shape[0], P.shape[1], 3), dtype=np.uint8)
