@@ -48,6 +48,9 @@ def make_train_set(model, images_path):
 
     for image_path in images:
         image = Image.open(image_path)
+        save_path = os.path.join(basic_path, os.path.basename(image_path).split('.')[0])
+        if os.path.exists(save_path):
+            continue
         # image_tensor = to_tensor(image).to(device)
         # print(image_tensor.size())
         P = np.zeros((image.height, image.width), dtype=np.float16)
@@ -56,21 +59,21 @@ def make_train_set(model, images_path):
             for h in range(image.height):
                 for w in range(0, image.width, BATCH):
                     # input_images = [image_tensor[:, max(0, h - INPUT_SIZE // 2):h + INPUT_SIZE // 2 + 1, rw - 129 // 2:rw + INPUT_SIZE // 2 + 1] for rw in range(w, w + BATCH)]
-                    input_images = [transform(crop_center(image, h, rw, INPUT_SIZE)).to(device) for rw in range(w, w + BATCH)]
+                    input_images = [transform(crop_center(image, h, rw, INPUT_SIZE)).to(device) for rw in range(w, min(image.width, w + BATCH))]
                     outputs = sigmoid(net(torch.stack(input_images)))
                     for i, output in enumerate(outputs):
                         P[h][w + i] = output
 
-            save_path = os.path.join(basic_path, os.path.basename(image_path).split('.')[0])
-            with open(save_path, 'w') as f:
-                for p in P:
-                    for q in p:
-                        print(q, end=' ', file=f)
-                    print(file=f)
-            # overray = Image.fromarray(probability_to_green_image_array(P))
-            # blended = Image.blend(image, overray, alpha=0.5)
-            # blended.show()
-            # blended.save('belended.jpg')
+        save_path = os.path.join(basic_path, os.path.basename(image_path).split('.')[0])
+        with open(save_path, 'w') as f:
+            for p in P:
+                for q in p:
+                    print(q, end=' ', file=f)
+                print(file=f)
+        # overray = Image.fromarray(probability_to_green_image_array(P))
+        # blended = Image.blend(image, overray, alpha=0.5)
+        # blended.show()
+        # blended.save('belended.jpg')
 
 def valid(model_path, image_path):
     basic_path = "dataset"
