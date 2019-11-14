@@ -6,6 +6,7 @@ import torchvision
 import torchvision.transforms as transforms
 import os
 import argparse
+import utils
 
 class AlexNet(nn.Module):
     #  for 129 x 129
@@ -115,12 +116,12 @@ class FullyConvNet(nn.Module):
         self.conv7 = nn.Conv2d(128, 1, 1)
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
-        x = self.conv4(x)
-        x = self.conv5(x)
-        x = self.conv6(x)
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        x = F.relu(self.conv4(x))
+        x = F.relu(self.conv5(x))
+        x = F.relu(self.conv6(x))
         x = self.conv7(x)
 
         return x
@@ -148,29 +149,28 @@ class Net(nn.Module):
         return x
 
 
-def train(save_dir):
+def train(save_dir, train_dir, test_dir):
+    os.makedirs(save_dir, exist_ok=True)
     BATCH = 32
 
     transform = transforms.Compose(
         [transforms.ToTensor(),
         transforms.Normalize(tuple([0.5] * 3), tuple([0.5] * 3))]
     )
-    trainset = torchvision.datasets.ImageFolder('./images', transform=transform)
+    trainset = torchvision.datasets.ImageFolder(train_dir, transform=transform)
     trainloader = torch.utils.data.DataLoader(trainset, batch_size=BATCH, shuffle=True, num_workers=2)
 
-    testset = torchvision.datasets.ImageFolder('./data', transform=transform)
+    testset = torchvision.datasets.ImageFolder(test_dir, transform=transform)
     testloader = torch.utils.data.DataLoader(testset, batch_size=BATCH, shuffle=False, num_workers=2)
 
     net = AlexNet()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    # device = torch.device("cuda")
-    # net.cuda()
     net.to(device)
 
-    invalid_num = len([path for path in os.listdir('./images/0') if os.path.isfile(os.path.join('./images/0', path))])
-    valid_num = len([path for path in os.listdir('./images/1') if os.path.isfile(os.path.join('./images/1', path))])
+    invalid_num = utils.count_files(os.path.join(train_dir, '0'))
+    valid_num = utils.count_files(os.path.join(train_dir, '1'))
     criterion = nn.BCEWithLogitsLoss(pos_weight=torch.Tensor([invalid_num / valid_num]).to(device))
-    optimizer = optim.SGD(net.parameters(), lr=0.0001, momentum=0.9)
+    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
     sigmoid = nn.Sigmoid()
 
     for epoch in range(5000):
@@ -222,6 +222,7 @@ if __name__ == "__main__":
     multiprocessing.set_start_method('spawn', True)
     parser = argparse.ArgumentParser()
     parser.add_argument('-s', '--savedir', type=str, required=True)
+    parser.add_argument('-t', '--traindir', type=str, required=True)
+    parser.add_argument('-v', '--testdir', type=str, required=True)
     args = parser.parse_args()
-    os.makedirs(args.savedir, exist_ok=True)
-    train(args.savedir)
+    train(args.savedir, args.traindir, args.testdir)

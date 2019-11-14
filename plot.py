@@ -35,7 +35,7 @@ def main(argv):
         iters, loss = make_label(log_file)
         ax.plot(iters, loss, label=log_file)
     
-    ax.set_xlabel('iters')
+    ax.set_xlabel('epochs')
     ax.set_ylabel('loss')
     ax.grid()
     ax.legend()
@@ -43,7 +43,7 @@ def main(argv):
     ticks = range(0,1000,10)
     
     #ax.set_yticks(ticks)
-    plt.show(fig)
+    plt.show()
     
 if __name__ == "__main__":
     main(sys.argv)

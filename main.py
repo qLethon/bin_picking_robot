@@ -14,7 +14,7 @@ import argparse
 import cv2
 from serialTest.serialPackage import armCommunication
 from collections import deque
-from valid import probability_to_green_image_array
+import utils
 
 
 ARM_RANGE_HEIGHT = 87
@@ -199,7 +199,7 @@ def main(model):
         h, w = np.unravel_index(np.argmax(P), P.shape)
         print("probability:", P[h][w])
 
-        overray = Image.fromarray(probability_to_green_image_array(P)).resize((ARM_RANGE_WIDTH * RATIO, ARM_RANGE_HEIGHT * RATIO))
+        overray = Image.fromarray(utils.probability_to_green_image_array(P)).resize((ARM_RANGE_WIDTH * RATIO, ARM_RANGE_HEIGHT * RATIO))
         blended = add_red_point(Image.blend(image, overray, alpha=0.5), h * RATIO, w * RATIO)
         blended.show()
 
