@@ -6,7 +6,7 @@ import torch.optim as optim
 import torchvision
 from torchvision import transforms
 import os
-from Network import AlexNet
+from Network import FullyConvNet
 from Network import train
 from PIL import Image
 import numpy as np
@@ -15,6 +15,7 @@ import cv2
 from serialTest.serialPackage import armCommunication
 from collections import deque
 import utils
+
 
 
 ARM_RANGE_HEIGHT = 87
@@ -146,7 +147,7 @@ def main(model):
     arm = armCommunication('COM8', 115200, 20)
     save_dirctory = './models/' + str(get_max_dir('./models') + 1)
     # os.makedirs(save_dirctory, exist_ok=True)
-    net = AlexNet()
+    net = FullyConvNet()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(device)
     net.to(device)
@@ -177,35 +178,24 @@ def main(model):
         print(image.size)
         print('done')
 
-        P = np.zeros(shape=(ARM_RANGE_HEIGHT, ARM_RANGE_WIDTH), dtype=np.float16)
+        P = np.zeros(shape=(ARM_RANGE_HEIGHT * RATIO, ARM_RANGE_WIDTH * RATIO), dtype=np.float16)
 
         with torch.no_grad():
-            for h in range(ARM_RANGE_HEIGHT):
-                input_images = []
-                for w in range(ARM_RANGE_WIDTH // 2):
-                    input_images.append(transform(crop_center(image, h * RATIO, (w + indicator * ARM_RANGE_WIDTH // 2) * RATIO, INPUT_SIZE)))
-                
-                outputs = sigmoid(net(torch.stack(input_images).to(device)))
-                    
-                for w in range(ARM_RANGE_WIDTH // 2):
-                    P[h][w + indicator * ARM_RANGE_WIDTH // 2] = outputs[w]
-
+            P = sigmoid(net(torch.stack([transform(image)]).to(device))).cpu().numpy()[0][0]
         
         for i, (h, w) in enumerate(latest_positions, 1):
-            for y in range(max(0, h - i ** 2), min(ARM_RANGE_HEIGHT, h + i ** 2 + 1)):
-                for x in range(max(0, w - i ** 2), min(ARM_RANGE_WIDTH, w + i ** 2 + 1)):
+            for y in range(max(0, h - i ** 2), min(ARM_RANGE_HEIGHT * RATIO, h + i ** 2 + 1)):
+                for x in range(max(0, w - i ** 2), min(ARM_RANGE_WIDTH * RATIO, w + i ** 2 + 1)):
                     P[y][x] = 0
 
         h, w = np.unravel_index(np.argmax(P), P.shape)
         print("probability:", P[h][w])
 
-        overray = Image.fromarray(utils.probability_to_green_image_array(P)).resize((ARM_RANGE_WIDTH * RATIO, ARM_RANGE_HEIGHT * RATIO))
-        blended = add_red_point(Image.blend(image, overray, alpha=0.5), h * RATIO, w * RATIO)
+        overray = Image.fromarray(utils.probability_to_green_image_array(P))
+        blended = Image.blend(image, overray, alpha=0.5)
         blended.show()
 
         latest_positions.append((h, w))
-        h *= RATIO
-        w *= RATIO
         time.sleep(1)  # what is this?
         try:
             res = pick(h, w, arm, RATIO)  # the position on the full image
@@ -220,6 +210,6 @@ def main(model):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-m', '--model', type=str, default='70.pth')
+    parser.add_argument('-m', '--model', type=str, default='no_maxpool_L1/60.pth')
     args = parser.parse_args()
     main(args.model)
