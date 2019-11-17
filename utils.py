@@ -12,3 +12,7 @@ def probability_to_green_image_array(P):
             green[h][w][1] = P[h][w]
 
     return green
+
+def crop_center(image, y, x, size):
+    d = size // 2
+    return image.crop((x - d, y - d, x + d + 1, y + d + 1))

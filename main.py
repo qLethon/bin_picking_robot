@@ -15,13 +15,15 @@ import cv2
 from serialTest.serialPackage import armCommunication
 from collections import deque
 import utils
+import settings
 
 
 
-ARM_RANGE_HEIGHT = 87
-ARM_RANGE_WIDTH = 250
-BASE_X = -125
-BASE_Y = 68
+ARM_RANGE_HEIGHT = settings.ARM_RANGE_HEIGHT
+ARM_RANGE_WIDTH = settings.ARM_RANGE_WIDTH
+BASE_X = settings.BASE_X
+BASE_Y = settings.BASE_Y
+RATIO = settings.RATIO
 
 def update_points(points):
     pointsOldDataFile = open('pointsOldData.csv','w')
@@ -96,10 +98,6 @@ def get_max_file(directory_path):
     os.makedirs(directory_path, exist_ok=True)
     return max([0] + [int(f.name.split('.')[0]) for f in os.scandir(directory_path) if f.is_file() and f.name.split('.')[0].isdigit()])
 
-def crop_center(image, y, x, size):
-    d = size // 2
-    return image.crop((x - d, y - d, x + d + 1, y + d + 1))
-
 def random_position(height, width, ratio):
     from random import randrange
     return randrange(height * ratio), randrange(width * ratio // 2)
@@ -141,7 +139,6 @@ def main(model):
     OBJECT_NUM = 3
     picked_count = 0
     indicator = 0
-    RATIO = 4  # the ratio of the arm position system to an image
     os.makedirs('entire', exist_ok=True)
     
     arm = armCommunication('COM8', 115200, 20)
@@ -204,7 +201,7 @@ def main(model):
             continue
         picked_count += res
         image_save_path = './images/{}/{}.jpg'.format(int(res), get_max_file('./images/{}'.format(int(res))) + 1)
-        crop_center(image, h, w, INPUT_SIZE).save(image_save_path)
+        utils.crop_center(image, h, w, INPUT_SIZE).save(image_save_path)
         image.save('./entire/{}.jpg'.format(get_max_file('./entire') + 1))
         counter(res)
 

@@ -10,9 +10,10 @@ import utils
 from Network import FullyConvNet
 from PIL import Image
 import numpy as np
+import settings
 
-ARM_RANGE_HEIGHT = 87
-ARM_RANGE_WIDTH = 250
+ARM_RANGE_WIDTH = settings.ARM_RANGE_WIDTH
+ARM_RANGE_HEIGHT = settings.ARM_RANGE_HEIGHT
 
 class Dataset(torch.utils.data.Dataset):
 
@@ -35,6 +36,7 @@ class Dataset(torch.utils.data.Dataset):
         if label.shape != (ARM_RANGE_HEIGHT, ARM_RANGE_WIDTH):
             label = Image.fromarray((label * 255).astype(np.uint8)).resize((ARM_RANGE_WIDTH, ARM_RANGE_HEIGHT))
             label = np.asarray(label, dtype=np.float32) / 255
+            
         return label
 
     def __getitem__(self, idx):
@@ -42,7 +44,7 @@ class Dataset(torch.utils.data.Dataset):
 
 def train(save_dir, train_dir, test_dir):
     os.makedirs(save_dir, exist_ok=True)
-    BATCH = 32
+    BATCH = 30
 
     transform = transforms.Compose(
         [transforms.ToTensor(),
@@ -61,7 +63,7 @@ def train(save_dir, train_dir, test_dir):
     print(device)
     print(len(trainset), len(trainloader))
 
-    criterion = nn.L1Loss()
+    criterion = nn.MSELoss()
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
     sigmoid = nn.Sigmoid()
 
@@ -96,6 +98,19 @@ def train(save_dir, train_dir, test_dir):
             print('[{}] val: {}'.format(epoch + 1, val_loss))
             with open(os.path.join(save_dir, "val.log"), 'a') as f:
                 print(epoch + 1, val_loss, file=f)
+
+        if epoch % 100 == 0:
+            net.eval()
+            image = Image.open("FCNN/test/images/2560.jpg")
+            with torch.no_grad():
+                inputs = torch.stack([transform(image).to(device)])
+                output = net(inputs)
+            P = sigmoid(output).cpu().numpy()[0][0]
+
+            overray = Image.fromarray(utils.probability_to_green_image_array(P))
+            blended = Image.blend(image, overray, alpha=0.5)
+            blended.save(os.path.join(save_dir, str(epoch) + ".jpg"))
+            net.train()
 
     print('Finished Training, save to' + save_dir)
     torch.save(net.state_dict(), os.path.join(save_dir, "final.pth"))

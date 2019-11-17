@@ -13,14 +13,21 @@ from PIL import Image
 import Network
 from Network import AlexNet
 import utils
+import settings
 
-def make_train_set(model, images_path):
-    from main import crop_center
+def make_train_set(model, images_path, save_path):
 
-    basic_path = "dataset"
-    os.makedirs("dataset", exist_ok=True)
+    os.makedirs(save_path, exist_ok=True)
+    labels_path = os.path.join(save_path, "labels")
+    blended_path = os.path.join(save_path, "blended")
+    os.makedirs(labels_path, exist_ok=True)
+    os.makedirs(blended_path, exist_ok=True)
+
     INPUT_SIZE = 129
-    BATCH = 500
+    ARM_RANGE_WIDTH = settings.ARM_RANGE_WIDTH
+    ARM_RANGE_HEIGHT = settings.ARM_RANGE_HEIGHT
+    RATIO = settings.RATIO
+    BATCH = ARM_RANGE_WIDTH
 
     net = AlexNet()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -36,36 +43,33 @@ def make_train_set(model, images_path):
     )
 
     images = [f.path for f in os.scandir(images_path) if f.is_file()]
+    images.sort(key=lambda path: int(os.path.basename(path).split('.')[0]))
 
     for image_path in images:
         image = Image.open(image_path)
-        save_path = os.path.join(basic_path, os.path.basename(image_path).split('.')[0])
+        if image.size != (ARM_RANGE_WIDTH * RATIO, ARM_RANGE_HEIGHT * RATIO):
+            image = image.resize((ARM_RANGE_WIDTH * RATIO, ARM_RANGE_HEIGHT * RATIO))
+        save_path = os.path.join(labels_path, os.path.basename(image_path).split('.')[0])
         if os.path.exists(save_path):
             continue
         print(image_path)
-        # image_tensor = to_tensor(image).to(device)
-        # print(image_tensor.size())
-        P = np.zeros((image.height, image.width), dtype=np.float16)
-        # P = np.random.ze(image.height, image.width)
+        P = np.zeros((ARM_RANGE_HEIGHT, ARM_RANGE_WIDTH), dtype=np.float16)
         with torch.no_grad():
-            for h in range(image.height):
-                for w in range(0, image.width, BATCH):
-                    # input_images = [image_tensor[:, max(0, h - INPUT_SIZE // 2):h + INPUT_SIZE // 2 + 1, rw - 129 // 2:rw + INPUT_SIZE // 2 + 1] for rw in range(w, w + BATCH)]
-                    input_images = [transform(crop_center(image, h, rw, INPUT_SIZE)).to(device) for rw in range(w, min(image.width, w + BATCH))]
-                    outputs = sigmoid(net(torch.stack(input_images)))
-                    for i, output in enumerate(outputs):
-                        P[h][w + i] = output
+            for h in range(ARM_RANGE_HEIGHT):
+                input_images = [transform(utils.crop_center(image, h * RATIO, w * RATIO, INPUT_SIZE)) for w in range(ARM_RANGE_WIDTH)]
+                outputs = sigmoid(net(torch.stack(input_images).to(device)))
+                for w, output in enumerate(outputs):
+                    P[h][w] = output
 
-        save_path = os.path.join(basic_path, os.path.basename(image_path).split('.')[0])
         with open(save_path, 'w') as f:
             for p in P:
                 for q in p:
                     print(q, end=' ', file=f)
                 print(file=f)
-        # overray = Image.fromarray(utils.probability_to_green_image_array(P))
-        # blended = Image.blend(image, overray, alpha=0.5)
-        # blended.show()
-        # blended.save('belended.jpg')
+
+        overray = Image.fromarray(utils.probability_to_green_image_array(P)).resize(image.size)
+        blended = Image.blend(image, overray, alpha=0.5)
+        blended.save(os.path.join(blended_path, os.path.basename(image_path)))
 
 def valid_one(model_path, image_path):
     transform = transforms.Compose(

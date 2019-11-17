@@ -107,19 +107,19 @@ class FullyConvNet(nn.Module):
         super(FullyConvNet, self).__init__()
         self.conv1 = nn.Conv2d(3, 16, 9, padding=4)
         self.conv2 = nn.Conv2d(16, 16, 5, padding=2)
-        # max_pool
+        self.pool2 = nn.MaxPool2d(5, 1, 2)
         self.conv3 = nn.Conv2d(16, 16, 5, padding=2)
         self.conv4 = nn.Conv2d(16, 16, 5, padding=2)
-        # max_pool
+        self.pool4 = nn.MaxPool2d(5, 1, 2)
         self.conv5 = nn.Conv2d(16, 128, 19, padding=9)
         self.conv6 = nn.Conv2d(128, 128, 1)
         self.conv7 = nn.Conv2d(128, 1, 1)
 
     def forward(self, x):
         x = F.relu(self.conv1(x))
-        x = F.relu(self.conv2(x))
+        x = self.pool2(F.relu(self.conv2(x)))
         x = F.relu(self.conv3(x))
-        x = F.relu(self.conv4(x))
+        x = self.pool4(F.relu(self.conv4(x)))
         x = F.relu(self.conv5(x))
         x = F.relu(self.conv6(x))
         x = self.conv7(x)
