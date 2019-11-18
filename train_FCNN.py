@@ -24,7 +24,7 @@ class Dataset(torch.utils.data.Dataset):
         labels = set(f.name for f in os.scandir(label_dir) if f.is_file())
         datasets = tuple(images & labels)
         self.images = [transform(Image.open(os.path.join(image_dir, f + ".jpg")).resize((ARM_RANGE_WIDTH, ARM_RANGE_HEIGHT))) for f in datasets]
-        self.labels = [self._get_label(os.path.join(label_dir, f)) for f in datasets]
+        self.labels = [to_tensor(self._get_label(os.path.join(label_dir, f))) for f in datasets]
      
     def __len__(self):
         return len(self.images)
@@ -32,12 +32,11 @@ class Dataset(torch.utils.data.Dataset):
     def _get_label(self, path):
         with open(path) as fp:
             label = np.asarray([[float(s) for s in line.split()] for line in fp], dtype=np.float32)
-        ma = label.max()
         if label.shape != (ARM_RANGE_HEIGHT, ARM_RANGE_WIDTH):
             label = Image.fromarray((label * 255).astype(np.uint8)).resize((ARM_RANGE_WIDTH, ARM_RANGE_HEIGHT))
             label = np.asarray(label, dtype=np.float32) / 255
             
-        return label.argmax()
+        return label
 
     def __getitem__(self, idx):
         return self.images[idx], self.labels[idx]
@@ -63,7 +62,7 @@ def train(save_dir, train_dir, test_dir):
     print(device)
     print(len(trainset), len(trainloader))
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.MSELoss()
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
     sigmoid = nn.Sigmoid()
 
@@ -72,8 +71,9 @@ def train(save_dir, train_dir, test_dir):
         for i, data in enumerate(trainloader):
             inputs, labels = data[0].to(device), data[1].to(device)
             optimizer.zero_grad()
-            outputs = net(inputs)
-            loss = criterion(outputs.view(outputs.size()[0], -1), labels)
+
+            outputs = sigmoid(net(inputs))
+            loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
 
@@ -85,13 +85,13 @@ def train(save_dir, train_dir, test_dir):
         if epoch % 10 == 0:
             torch.save(net.state_dict(), os.path.join(save_dir, "{}.pth".format(epoch)))
             val_loss = 0
-            # net.eval()
+            net.eval()
             with torch.no_grad():
                 for data in testloader:
                     inputs, labels = data[0].to(device), data[1].to(device)
-                    outputs = net(inputs)
-                    val_loss += criterion(outputs.view(outputs.size()[0], -1), labels).item()
-            # net.train()
+                    outputs = sigmoid(net(inputs))
+                    val_loss += criterion(outputs, labels).item()
+            net.train()
 
             val_loss /= len(testloader)
             print('[{}] val: {}'.format(epoch + 1, val_loss))
@@ -104,10 +104,10 @@ def train(save_dir, train_dir, test_dir):
             with torch.no_grad():
                 inputs = torch.stack([transform(image).to(device)])
                 output = net(inputs)
-            P = nn.Softmax(1)(output.view(output.size()[0], -1)).view_as(output).cpu().numpy()[0][0]
+            P = sigmoid(output).cpu().numpy()[0][0]
 
             overray = Image.fromarray(utils.probability_to_green_image_array(P))
-            blended = Image.blend(image, overray, alpha=1)
+            blended = Image.blend(image, overray, alpha=0.5)
             blended.save(os.path.join(save_dir, str(epoch) + ".jpg"))
             net.train()
 
@@ -123,4 +123,3 @@ if __name__ == "__main__":
     parser.add_argument('-v', '--testdir', type=str)
     args = parser.parse_args()
     train(args.savedir, args.traindir, args.testdir)
-    # train("test_fcnn_2", "FCNN/train/", "FCNN/test/")
