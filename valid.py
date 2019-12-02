@@ -49,7 +49,7 @@ def make_train_set(model, images_path, save_path):
         image = Image.open(image_path)
         if image.size != (ARM_RANGE_WIDTH * RATIO, ARM_RANGE_HEIGHT * RATIO):
             image = image.resize((ARM_RANGE_WIDTH * RATIO, ARM_RANGE_HEIGHT * RATIO))
-        save_path = os.path.join(labels_path, os.path.basename(image_path).split('.')[0])
+        save_path = os.path.join(labels_path, os.path.basename(image_path).rstrip(".jpg"))
         if os.path.exists(save_path):
             continue
         print(image_path)

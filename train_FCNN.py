@@ -18,16 +18,17 @@ ARM_RANGE_HEIGHT = settings.ARM_RANGE_HEIGHT
 class Dataset(torch.utils.data.Dataset):
 
     def __init__(self, image_dir, label_dir, transform=transforms.ToTensor()):
-        to_tensor = transforms.ToTensor()
+        self.to_tensor = transforms.ToTensor()
+        self.transform = transform
 
         images = set(f.name.rstrip('.jpg') for f in os.scandir(image_dir) if f.is_file())
         labels = set(f.name for f in os.scandir(label_dir) if f.is_file())
         datasets = tuple(images & labels)
-        self.images = [transform(Image.open(os.path.join(image_dir, f + ".jpg")).resize((ARM_RANGE_WIDTH, ARM_RANGE_HEIGHT))) for f in datasets]
-        self.labels = [to_tensor(self._get_label(os.path.join(label_dir, f))) for f in datasets]
+        self.image_paths = [os.path.join(image_dir, f + ".jpg") for f in datasets]
+        self.label_paths = [os.path.join(label_dir, f) for f in datasets]
      
     def __len__(self):
-        return len(self.images)
+        return len(self.image_paths)
 
     def _get_label(self, path):
         with open(path) as fp:
@@ -39,7 +40,10 @@ class Dataset(torch.utils.data.Dataset):
         return label
 
     def __getitem__(self, idx):
-        return self.images[idx], self.labels[idx]
+        image = self.transform(Image.open(self.image_paths[idx]).resize((ARM_RANGE_WIDTH, ARM_RANGE_HEIGHT)))
+        label = self.to_tensor(self._get_label(self.label_paths[idx]))
+
+        return image, label
 
 def train(save_dir, train_dir, test_dir):
     os.makedirs(save_dir, exist_ok=True)
@@ -63,7 +67,7 @@ def train(save_dir, train_dir, test_dir):
     print(len(trainset), len(trainloader))
 
     criterion = nn.MSELoss()
-    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optim.SGD(net.parameters(), lr=0.01, momentum=0.9)
     sigmoid = nn.Sigmoid()
 
     for epoch in range(5000):
